@@ -1,0 +1,36 @@
+{
+    "opportunities": [],
+    "assessments": [],
+    "users": [
+        {
+            "id": 22,
+            "email": "jane.smith@company.com",
+            "name": "Jane Smith",
+            "role": "Solution Architect"
+        },
+        {
+            "id": 23,
+            "email": "michael.chen@company.com",
+            "name": "Michael Chen",
+            "role": "Solution Architect"
+        },
+        {
+            "id": 24,
+            "email": "david.wilson@company.com",
+            "name": "David Wilson",
+            "role": "Solution Architect"
+        },
+        {
+            "id": 25,
+            "email": "management@company.com",
+            "name": "Executive User",
+            "role": "Management"
+        },
+        {
+            "id": 26,
+            "email": "practice.head@company.com",
+            "name": "John Doe",
+            "role": "Practice Head"
+        }
+    ]
+}
