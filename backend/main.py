@@ -9,9 +9,22 @@ from dotenv import load_dotenv
 
 # Ensure init_db is imported
 from database import init_db, get_db, Opportunity, Assessment, SessionLocal
+from sync_manager import sync_opportunities
+
 
 # Load environment variables from .env file if it exists (useful for local dev)
 load_dotenv()
+
+# Scheduler
+try:
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    scheduler = AsyncIOScheduler()
+    HAS_SCHEDULER = True
+except ImportError:
+    print("Warning: APScheduler not found. Automated sync (cronjob) will not run.")
+    HAS_SCHEDULER = False
+    scheduler = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -65,11 +78,28 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️  Self-healing check failed: {e}")
     
+    # Start Scheduler
+    if HAS_SCHEDULER:
+        print("\n[3/3] Starting Automated Sync Scheduler (Cronjob)...")
+        # Process Fetching every 15 minutes
+        scheduler.add_job(
+            sync_opportunities, 
+            'interval', 
+            minutes=15, 
+            id='oracle_sync_job', 
+            replace_existing=True
+        )
+        scheduler.start()
+        print("✓ Scheduler started: Syncing every 15 minutes.")
+    
     print("\n" + "="*60)
     print("✓ Backend Ready!")
     print("="*60 + "\n")
     
     yield
+    
+    if HAS_SCHEDULER:
+        scheduler.shutdown()
 
 # Updated Title
 app = FastAPI(title="BQS Antigravity", lifespan=lifespan)
