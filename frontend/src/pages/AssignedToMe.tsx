@@ -301,7 +301,7 @@ export function AssignedToMe() {
                                             {opp.scored_by || 'N/A'}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                            {opp.assessment_status === 'draft' || opp.assessment_status === 'not-started' ? (
+                                            {opp.workflow_status === 'ASSIGNED_TO_SA' || opp.assessment_status === 'draft' || opp.assessment_status === 'not-started' ? (
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
@@ -311,16 +311,38 @@ export function AssignedToMe() {
                                                 >
                                                     Score Now
                                                 </button>
+                                            ) : opp.workflow_status === 'WAITING_PH_APPROVAL' ? (
+                                                <span className="inline-flex items-center px-3 py-1.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                    Awaiting PH Review
+                                                </span>
                                             ) : (
                                                 <button
-                                                    onClick={(e) => {
+                                                    onClick={async (e) => {
                                                         e.stopPropagation();
-                                                        // TODO: API call to submit to Practice Head
-                                                        alert(`Submitting assessment for ${opp.name} to Practice Head for review`);
+                                                        try {
+                                                            const response = await fetch(`http://localhost:8000/api/opportunities/${opp.id}/send-to-practice-head`, {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({
+                                                                    score: opp.score || opp.win_probability,
+                                                                    notes: opp.sa_notes || 'Assessment completed'
+                                                                })
+                                                            });
+
+                                                            if (response.ok) {
+                                                                alert(`✓ Score submitted to Practice Head for review`);
+                                                                fetchAssignedOpportunities(); // Refresh the list
+                                                            } else {
+                                                                alert('Failed to submit. Please try again.');
+                                                            }
+                                                        } catch (error) {
+                                                            console.error('Error submitting to PH:', error);
+                                                            alert('Error submitting. Please try again.');
+                                                        }
                                                     }}
                                                     className="px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors"
                                                 >
-                                                    Submit to Practice Head
+                                                    Send to Practice Head
                                                 </button>
                                             )}
                                         </td>

@@ -94,70 +94,82 @@ export const PracticeHeadReview = () => {
 
     const fetchSubmittedAssessments = async () => {
         try {
-            // TODO: API call
-            const mockData: SubmittedAssessment[] = [
-                {
-                    id: 1,
-                    opp_id: 101,
-                    opportunity_name: 'Cloud Migration - ACME Corp',
-                    customer: 'ACME Corporation',
-                    practice: 'Cloud',
-                    deal_value: 2500000,
-                    currency: 'USD',
-                    assessed_by: 'Rajesh Kumar',
-                    submitted_at: '2026-01-08T14:30:00',
-                    score: 85,
-                    recommendation: 'Pursue',
-                    confidence_level: 'High'
-                },
-                {
-                    id: 2,
-                    opp_id: 102,
-                    opportunity_name: 'Cybersecurity Assessment - TechStart',
-                    customer: 'TechStart Inc',
-                    practice: 'Cybersecurity',
-                    deal_value: 750000,
-                    currency: 'USD',
-                    assessed_by: 'Priya Sharma',
-                    submitted_at: '2026-01-07T11:15:00',
-                    score: 62,
-                    recommendation: 'Caution',
-                    confidence_level: 'Medium'
-                },
-                {
-                    id: 3,
-                    opp_id: 103,
-                    opportunity_name: 'ERP Implementation - GlobalTech',
-                    customer: 'GlobalTech Solutions',
-                    practice: 'ERP',
-                    deal_value: 4200000,
-                    currency: 'USD',
-                    assessed_by: 'Amit Patel',
-                    submitted_at: '2026-01-06T16:45:00',
-                    score: 92,
-                    recommendation: 'Pursue',
-                    confidence_level: 'High'
-                },
-                {
-                    id: 4,
-                    opp_id: 104,
-                    opportunity_name: 'Data Analytics Platform - RetailCo',
-                    customer: 'RetailCo',
-                    practice: 'Data & Analytics',
-                    deal_value: 1800000,
-                    currency: 'USD',
-                    assessed_by: 'Sneha Reddy',
-                    submitted_at: '2026-01-05T09:20:00',
-                    score: 45,
-                    recommendation: 'No-Bid',
-                    confidence_level: 'High'
-                }
-            ];
-            setAssessments(mockData);
+            const response = await fetch('http://localhost:8000/api/opportunities');
+            const data = await response.json();
+
+            // Filter for opportunities awaiting PH approval
+            const awaitingReview = data.filter((opp: Opportunity) =>
+                opp.workflow_status === 'WAITING_PH_APPROVAL'
+            );
+
+            // Map to assessment format
+            const mapped: SubmittedAssessment[] = awaitingReview.map((opp: Opportunity) => ({
+                id: opp.id,
+                opp_id: opp.id,
+                opportunity_name: opp.name,
+                customer: opp.customer,
+                practice: opp.practice || 'N/A',
+                deal_value: opp.deal_value || 0,
+                currency: opp.currency || 'USD',
+                assessed_by: opp.assigned_sa || 'Unknown SA',
+                submitted_at: opp.last_synced_at || new Date().toISOString(),
+                score: opp.win_probability || 0,
+                recommendation: opp.win_probability >= 80 ? 'Pursue' : opp.win_probability >= 60 ? 'Caution' : 'No-Bid',
+                confidence_level: opp.win_probability >= 75 ? 'High' : opp.win_probability >= 50 ? 'Medium' : 'Low'
+            }));
+
+            setAssessments(mapped);
             setLoading(false);
         } catch (error) {
             console.error('Error fetching assessments:', error);
             setLoading(false);
+        }
+    };
+
+    const handleAcceptScore = async (oppId: number) => {
+        try {
+            const response = await fetch(`http://localhost:8000/api/opportunities/${oppId}/accept-score`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    comments: 'Score accepted by Practice Head'
+                })
+            });
+
+            if (response.ok) {
+                alert('✓ Score accepted and forwarded to Management');
+                fetchSubmittedAssessments(); // Refresh the list
+            } else {
+                alert('Failed to accept score. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error accepting score:', error);
+            alert('Error accepting score. Please try again.');
+        }
+    };
+
+    const handleRejectScore = async (oppId: number, oppName: string) => {
+        const reason = prompt(`Reject "${oppName}"?\n\nPlease provide a reason for rejection:`);
+        if (!reason) return; // User cancelled
+
+        try {
+            const response = await fetch(`http://localhost:8000/api/opportunities/${oppId}/reject-score`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    reason: reason
+                })
+            });
+
+            if (response.ok) {
+                alert('✓ Score rejected and returned to SA for rework');
+                fetchSubmittedAssessments(); // Refresh the list
+            } else {
+                alert('Failed to reject score. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error rejecting score:', error);
+            alert('Error rejecting score. Please try again.');
         }
     };
 
@@ -608,13 +620,22 @@ export const PracticeHeadReview = () => {
                                                 </div>
                                             </td>
                                             <td className="px-4 py-4">
-                                                <button
-                                                    onClick={() => navigate(`/opportunity/${assessment.opp_id}`)}
-                                                    className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors"
-                                                >
-                                                    <Eye size={14} />
-                                                    Review
-                                                </button>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => handleAcceptScore(assessment.opp_id)}
+                                                        className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded hover:bg-green-700 transition-colors"
+                                                    >
+                                                        <CheckCircle size={14} />
+                                                        Accept
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleRejectScore(assessment.opp_id, assessment.opportunity_name)}
+                                                        className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded hover:bg-red-700 transition-colors"
+                                                    >
+                                                        <AlertCircle size={14} />
+                                                        Reject
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))

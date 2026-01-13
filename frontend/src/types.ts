@@ -1,24 +1,29 @@
 export interface Opportunity {
     id: number;
-    remote_id: string;
-    name: string;
-    customer: string;
-    practice: string;
+    remote_id: string; // Oracle Opportunity Number
+    name: string;      // Oracle Name
+    customer: string;  // Oracle Account
+    practice: string;  // Oracle Practice
     geo: string;
+    region?: string;   // Oracle Region
+    sector?: string;   // Oracle Sector
     deal_value: number;
     currency: string;
-    win_probability?: number;
-    sales_owner: string;
-    stage: string;
+    win_probability?: number; // Oracle Win (%)
+    sales_owner: string;      // Oracle Owner
+    stage: string;            // Oracle Sales Stage
     close_date: string;
+    expected_po_date?: string; // Expected PO Date
+    estimated_billing_date?: string; // Oracle Estimated Billing Date
     rfp_date?: string;
     last_synced_at: string;
 
-    // 3-Role Workflow Status Machine
+    // 3-Role Workflow Status
+    status?: string; // Internal Status for workflow (New, Scoring Pending, etc.)
     workflow_status?: string;
     assigned_practice?: string;
     assigned_practice_head?: string;
-    assigned_sa?: string;
+    assigned_sa?: string;      // Solution Architect
     assigned_sa_secondary?: string;
 
     // Timestamps
@@ -33,6 +38,12 @@ export interface Opportunity {
     practice_head_comments?: string;
     management_decision?: string;
     management_comments?: string;
+
+    // UI specific
+    current_stage?: string;
+    governance_status?: string;
+    pending_with?: string;
+    stage_entered_at?: string;
 
     // Lock
     locked_by?: string;

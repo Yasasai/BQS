@@ -1,57 +1,46 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Menu, Home, Bell, User, Inbox, ClipboardCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Menu, Home, Bell, User, LayoutDashboard, Inbox, CheckSquare } from 'lucide-react';
 
 export function TopBar() {
-    const location = useLocation();
+    const navigate = useNavigate();
 
     return (
-        <div className="h-14 bg-crm-header flex items-center px-4 justify-between border-b border-gray-200 sticky top-0 z-50">
+        <header className="bg-white border-b border-gray-200 h-12 flex items-center justify-between px-4 sticky top-0 z-50">
             <div className="flex items-center gap-6">
-                <button className="text-gray-700 p-1 hover:bg-black/5 rounded">
-                    <Menu size={20} />
-                </button>
-                <div className="flex flex-col leading-none">
-                    <span className="text-2xl font-light text-gray-700 tracking-wide font-serif">inspira</span>
+                <div className="flex items-center gap-2">
+                    <Menu size={20} className="text-gray-500 cursor-pointer" />
+                    <span className="text-[#003366] text-xl font-serif italic tracking-tighter">inspira</span>
                 </div>
 
-                {/* Navigation Links */}
-                <nav className="flex items-center gap-2 ml-4">
-                    <Link
-                        to="/"
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-colors ${location.pathname === '/'
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'text-gray-600 hover:bg-gray-100'
-                            }`}
+                <nav className="flex items-center gap-4 ml-6">
+                    <button
+                        onClick={() => navigate('/')}
+                        className="flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-blue-600"
                     >
-                        <Inbox size={16} />
+                        <Inbox size={14} />
                         Opportunity Inbox
-                    </Link>
-                    <Link
-                        to="/assigned-to-me"
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-colors ${location.pathname === '/assigned-to-me'
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'text-gray-600 hover:bg-gray-100'
-                            }`}
+                    </button>
+                    <button
+                        onClick={() => navigate('/assigned-to-me')}
+                        className="flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-blue-600"
                     >
-                        <ClipboardCheck size={16} />
+                        <CheckSquare size={14} />
                         Assigned to Me
-                    </Link>
+                    </button>
                 </nav>
             </div>
 
-            <div className="flex items-center gap-4 text-gray-700">
-                <button className="p-2 hover:bg-black/5 rounded-full">
-                    <Home size={20} />
-                </button>
-                <div className="relative p-2 hover:bg-black/5 rounded-full cursor-pointer">
-                    <Bell size={20} />
-                    <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-orange-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold border-2 border-crm-header">3</div>
+            <div className="flex items-center gap-4">
+                <Home size={18} className="text-gray-500 cursor-pointer hover:text-blue-600" onClick={() => navigate('/')} />
+                <div className="relative">
+                    <Bell size={18} className="text-gray-500 cursor-pointer" />
+                    <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[9px] rounded-full h-3 w-3 flex items-center justify-center font-bold">3</span>
                 </div>
-                <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-700 font-medium text-xs cursor-pointer">
+                <div className="flex items-center justify-center w-7 h-7 bg-orange-100 rounded-full text-orange-700 text-[10px] font-bold border border-orange-200">
                     YU
                 </div>
             </div>
-        </div>
+        </header>
     );
 }

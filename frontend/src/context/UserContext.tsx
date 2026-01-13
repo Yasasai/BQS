@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-export type UserRole = 'management' | 'practice_head' | 'solution_architect';
+export type UserRole = 'MANAGEMENT' | 'PRACTICE_HEAD' | 'SOLUTION_ARCHITECT';
 
 interface User {
     id: string;
@@ -12,6 +12,7 @@ interface User {
 interface UserContextType {
     currentUser: User;
     setCurrentUser: (user: User) => void;
+    setRole: (role: UserRole) => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -32,13 +33,17 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
     // Default user - Practice Head who assigns and reviews
     const [currentUser, setCurrentUser] = useState<User>({
         id: '1',
-        name: 'Practice Head',
-        email: 'practice.head@inspiraenterprise.com',
-        role: 'practice_head' // Practice Head - assigns SAs and reviews assessments
+        name: 'Bid Team User',
+        email: 'user@inspiraenterprise.com',
+        role: 'PRACTICE_HEAD' // Default role
     });
 
+    const setRole = (role: UserRole) => {
+        setCurrentUser(prev => ({ ...prev, role }));
+    };
+
     return (
-        <UserContext.Provider value={{ currentUser, setCurrentUser }}>
+        <UserContext.Provider value={{ currentUser, setCurrentUser, setRole }}>
             {children}
         </UserContext.Provider>
     );

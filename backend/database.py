@@ -38,24 +38,39 @@ class Opportunity(Base):
     __tablename__ = "opportunities"
 
     id = Column(Integer, primary_key=True, index=True)
-    remote_id = Column(String, unique=True, index=True)
-    name = Column(String)
-    customer = Column(String)
+    remote_id = Column(String, unique=True, index=True) # Oracle Opportunity Number
+    name = Column(String)                               # Oracle Name
+    customer = Column(String)                           # Oracle Account
+    practice = Column(String)                           # Oracle Practice
+    geo = Column(String)                                # GEO
+    region = Column(String)                             # Region
+    sector = Column(String)                             # Sector
     deal_value = Column(Float)
     currency = Column(String, default="USD")
-    win_probability = Column(Float) # The "Score"
+    win_probability = Column(Float)                     # Oracle Win (%)
+    sales_owner = Column(String)                        # Oracle Owner
+    stage = Column(String)                               # Oracle Sales Stage (e.g., Bid Preparation)
+    
+    # Dates
+    expected_po_date = Column(String)                   # Expected PO Date
+    estimated_billing_date = Column(String)             # Oracle Estimated Billing Date
+    close_date = Column(String)
     
     # --- STRICT STATE MACHINE ---
-    # NEW | ASSIGNED_TO_PRACTICE | PENDING_ASSESSMENT | REVIEW_PENDING | PENDING_GOVERNANCE | COMPLETED_BID | COMPLETED_NO_BID
-    workflow_status = Column(String, default="NEW")
+    # NEW | ASSIGNED_TO_PRACTICE | PENDING_ASSESSMENT | ...
+    # mapped to user-friendly labels: New from CRM, Scoring Pending, etc.
+    workflow_status = Column(String, default="New from CRM")
+    status = Column(String, default="New from CRM") # Redundant but safe for frontend
     
     # Ownership
-    practice = Column(String) # assigned_practice
-    sa_owner = Column(String) # assigned_sa
+    assigned_sa = Column(String) # Solution Architect
+    sa_owner = Column(String)    # redundant but used in some endpoints
     
     # Metadata for Governance
     sa_notes = Column(Text)
     practice_head_recommendation = Column(String) # APPROVE | REJECT
+    practice_head_notes = Column(Text) # PH comments/rejection reasons
+    assigned_practice = Column(String) # Practice assigned by management
     management_decision = Column(String) # BID | NO_BID
     close_reason = Column(Text)
     

@@ -1,31 +1,131 @@
-# --- Frontend (Node / React / Vite) ---
+# ============================================================
+# BQS Project - Professional .gitignore
+# ============================================================
+# Only source code and necessary configs go to GitHub
+# No secrets, no temp files, no build artifacts
+# ============================================================
+
+# --- SECRETS & CREDENTIALS (NEVER COMMIT!) ---
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets/
+credentials/
+
+# --- FRONTEND (React/Vite) ---
 node_modules/
 dist/
 dist-ssr/
+build/
 *.local
-.vscode/*
-!.vscode/extensions.json
-.DS_Store
+.vite/
+.cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 package-lock.json
+yarn.lock
 
-# --- Backend (Python / FastAPI) ---
+# --- BACKEND (Python/FastAPI) ---
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
 venv/
 .venv/
 env/
-.env
+ENV/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.eggs/
+
+# --- DATABASE FILES (Local Only) ---
 *.db
+*.sqlite
 *.sqlite3
-
-# --- Database / Backups ---
+postgres_data/
+pgdata/
 *.sql
-!init_db.sql
+!backend/schema.sql
+!backend/init_db.sql
 backup_data.sql
+dump_*.sql
 
-# --- IDEs / System ---
-.idea/
-.vscode/
+# --- TEMPORARY FILES ---
+*.tmp
+*.temp
+*.log
+*.bak
+*.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# --- IDE / EDITOR ---
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.sublime-workspace
+*.sublime-project
+.project
+.classpath
+.settings/
+
+# --- OS SPECIFIC ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# --- TEMPORARY SCRIPTS (Consolidated in scripts/) ---
+# Root-level duplicate scripts
+check_data.py
+heal_database.py
+populate_test_data.py
+quick_populate.py
+seed_screenshot.py
+self_heal.py
+setup_now.py
+setup_complete.py
+
+# Batch files
+setup_complete.bat
+setup_data.bat
+setup_env.bat
+run_sync.bat
+
+# Temporary documentation
+EMERGENCY_GUIDE.md
+SETUP_GUIDE.md
+PGADMIN_SCRIPT.txt
+SELF_HEAL.txt
+
+# --- BUILD ARTIFACTS ---
+*.pyc
+*.pyo
+*.egg
+*.manifest
+*.spec
+
+# --- KEEP THESE (Important Files) ---
+!README.md
+!requirements.txt
+!package.json
+!.gitignore
+!scripts/

@@ -127,65 +127,86 @@ export function OpportunityDetail() {
                 {/* Content Area */}
                 <div className="flex-1 p-6">
                     {activeTab === 'overview' && (
-                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                            <div className="grid grid-cols-2 gap-x-12 gap-y-6">
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+                            <h3 className="text-lg font-bold text-gray-800 border-b pb-2 mb-6">Opportunity Information</h3>
+                            <div className="grid grid-cols-2 gap-x-16 gap-y-6">
                                 {/* Left Column */}
                                 <div className="space-y-6">
                                     <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                            Description
+                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                            Opportunity Number
                                         </label>
-                                        <p className="text-sm text-gray-900">
+                                        <p className="text-[13px] text-gray-900 font-medium">
+                                            {opportunity.remote_id}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                            Owner
+                                        </label>
+                                        <p className="text-[13px] text-gray-900 border-b border-gray-100 pb-1">
+                                            {opportunity.sales_owner || '-'}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                            Name
+                                        </label>
+                                        <p className="text-[13px] text-gray-900 border-b border-gray-100 pb-1 font-semibold">
                                             {opportunity.name}
                                         </p>
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                            Account (Customer)
+                                        </label>
+                                        <p className="text-[13px] text-blue-600 font-semibold border-b border-gray-100 pb-1">
+                                            {opportunity.customer}
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                                GEO
+                                            </label>
+                                            <p className="text-[13px] text-gray-900 border-b border-gray-100 pb-1">{opportunity.geo || 'MEA'}</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                                Region
+                                            </label>
+                                            <p className="text-[13px] text-gray-900 border-b border-gray-100 pb-1">{opportunity.region || 'MEA - Dubai'}</p>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                            Sector
+                                        </label>
+                                        <p className="text-[13px] text-gray-900 border-b border-gray-100 pb-1">
+                                            {opportunity.sector || 'Others'}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                                             Practice
                                         </label>
-                                        <p className="text-sm text-gray-900">
-                                            {opportunity.practice || '-'}
+                                        <p className="text-[13px] text-gray-900 border-b border-gray-100 pb-1">
+                                            {opportunity.practice || 'MSSP -Cybersecurity'}
                                         </p>
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                            Deal Value
+                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                            Solution Architect
                                         </label>
-                                        <p className="text-sm text-gray-900 font-medium">
-                                            {new Intl.NumberFormat('en-US', {
-                                                style: 'currency',
-                                                currency: opportunity.currency || 'USD',
-                                                maximumFractionDigits: 0
-                                            }).format(opportunity.deal_value)}
-                                        </p>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                            Status
-                                        </label>
-                                        <p className="text-sm text-gray-900">
-                                            {opportunity.stage}
-                                        </p>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                            Proposal Submitted
-                                        </label>
-                                        <p className="text-sm text-gray-900">
-                                            {opportunity.rfp_date || '-'}
-                                        </p>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                            RFP Date
-                                        </label>
-                                        <p className="text-sm text-gray-900">
-                                            {opportunity.rfp_date || '2024-06-15'}
+                                        <p className="text-[13px] text-gray-900 border-b border-gray-100 pb-1 font-medium bg-blue-50/50 px-2 py-1 rounded italic">
+                                            {opportunity.assigned_sa || 'NA'}
                                         </p>
                                     </div>
                                 </div>
@@ -193,57 +214,68 @@ export function OpportunityDetail() {
                                 {/* Right Column */}
                                 <div className="space-y-6">
                                     <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                            Customer
+                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                            Sales Stage
                                         </label>
-                                        <p className="text-sm text-gray-900">
-                                            {opportunity.customer}
+                                        <p className="text-[13px] text-gray-900 font-medium">
+                                            {opportunity.stage || 'Bid Preparation'}
                                         </p>
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                            Geo Region
+                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                            Win Probability (%)
                                         </label>
-                                        <p className="text-sm text-gray-900">
-                                            {opportunity.geo || '-'}
+                                        <p className="text-[13px] text-gray-900 font-bold text-lg text-blue-700">
+                                            {opportunity.win_probability || '40'}
                                         </p>
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                            Sales Owner
+                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                            Currency
                                         </label>
-                                        <p className="text-sm text-gray-900">
-                                            {opportunity.sales_owner || '-'}
+                                        <p className="text-[13px] text-gray-900">{opportunity.currency || 'AED'}</p>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                            Estimated Billing Date
+                                        </label>
+                                        <p className="text-[13px] text-gray-900 border-b border-gray-100 pb-1">
+                                            {opportunity.estimated_billing_date || '27-Nov-2025'}
                                         </p>
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                            Win Probability
+                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                            Expected PO Receive Date
                                         </label>
-                                        <p className="text-sm text-gray-900">
-                                            {opportunity.win_probability ? `${opportunity.win_probability}%` : '-'}
+                                        <p className="text-[13px] text-gray-900 border-b border-gray-100 pb-1 font-semibold text-blue-800">
+                                            {opportunity.expected_po_date || '29-Oct-2025'}
                                         </p>
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                            Last Updated
+                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                            Deal Amount
                                         </label>
-                                        <p className="text-sm text-gray-900">
-                                            {new Date(opportunity.last_synced_at).toLocaleString()}
+                                        <p className="text-xl font-bold text-gray-900">
+                                            {new Intl.NumberFormat('en-US', {
+                                                style: 'currency',
+                                                currency: opportunity.currency || 'AED',
+                                                maximumFractionDigits: 0
+                                            }).format(opportunity.deal_value || 500000)}
                                         </p>
                                     </div>
 
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                            Close Date
-                                        </label>
-                                        <p className="text-sm text-gray-900">
-                                            {opportunity.close_date || '-'}
-                                        </p>
+                                    <div className="pt-4">
+                                        <div className="bg-gray-50 p-4 rounded-md border border-gray-100">
+                                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2">Internal Status</label>
+                                            <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-bold uppercase tracking-tighter">
+                                                {opportunity.status || 'NEW FROM CRM'}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

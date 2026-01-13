@@ -3,93 +3,108 @@ import { Opportunity } from '../types';
 import { MoreHorizontal, Play, CheckCircle, UserPlus, FileText, Send } from 'lucide-react';
 
 interface ActionColumnProps {
-    role: 'MANAGEMENT' | 'PRACTICE_HEAD' | 'SA';
+    role: 'MANAGEMENT' | 'PRACTICE_HEAD' | 'SOLUTION_ARCHITECT';
     opportunity: Opportunity;
     onAction: (action: string, opp: Opportunity) => void;
 }
 
 export const ActionColumn: React.FC<ActionColumnProps> = ({ role, opportunity, onAction }) => {
-    const status = opportunity.status;
+    const status = opportunity.status || 'New from CRM';
 
     const renderManagementActions = () => {
-        switch (status) {
-            case 'NEW':
-                return (
+        if (status === 'High Value / Governance Needed') {
+            return (
+                <div className="flex gap-2">
                     <button
-                        onClick={() => onAction('ASSIGN_PRACTICE', opportunity)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 font-medium text-xs transition-colors"
+                        onClick={() => onAction('FINAL_APPROVE', opportunity)}
+                        className="px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium text-xs transition-colors"
                     >
-                        <MoreHorizontal size={14} /> Assign Practice
+                        Final Approve
                     </button>
-                );
-            case 'PENDING_GOVERNANCE':
-                return (
                     <button
-                        onClick={() => onAction('FINAL_DECISION', opportunity)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-600 rounded-md hover:bg-green-100 font-medium text-xs transition-colors"
+                        onClick={() => onAction('DROP_BID', opportunity)}
+                        className="px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 font-medium text-xs transition-colors"
                     >
-                        <CheckCircle size={14} /> Final Decision
+                        Drop Bid
                     </button>
-                );
-            default:
-                return <span className="text-gray-400 text-xs italic">Awaiting Team</span>;
+                </div>
+            );
         }
+        return <span className="text-gray-400 text-xs italic">Reviewing...</span>;
     };
 
     const renderPracticeHeadActions = () => {
-        switch (status) {
-            case 'ASSIGNED_TO_PRACTICE':
-                return (
-                    <button
-                        onClick={() => onAction('ASSIGN_ARCHITECT', opportunity)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-600 rounded-md hover:bg-purple-100 font-medium text-xs transition-colors"
-                    >
-                        <UserPlus size={14} /> Assign Architect
-                    </button>
-                );
-            case 'REVIEW_PENDING':
-                return (
-                    <button
-                        onClick={() => onAction('SCORE_REVIEW', opportunity)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-600 rounded-md hover:bg-orange-100 font-medium text-xs transition-colors"
-                    >
-                        <FileText size={14} /> Review Score
-                    </button>
-                );
-            default:
-                return <span className="text-gray-400 text-xs italic">Syncing...</span>;
+        if (status === 'New from CRM') {
+            return (
+                <button
+                    onClick={() => onAction('ASSIGN_TO_SA', opportunity)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium text-xs transition-colors"
+                >
+                    <UserPlus size={14} /> Assign to SA
+                </button>
+            );
         }
+        if (status === 'Scoring Pending') {
+            return <span className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-md font-medium text-xs">Waiting for SA</span>;
+        }
+        if (status === 'Scored by SA') {
+            return (
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => onAction('APPROVE_FOR_BID', opportunity)}
+                        className="px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium text-xs transition-colors"
+                    >
+                        Approve for Bid
+                    </button>
+                    <button
+                        onClick={() => onAction('REJECT', opportunity)}
+                        className="px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 font-medium text-xs transition-colors"
+                    >
+                        Reject
+                    </button>
+                </div>
+            );
+        }
+        return <span className="text-gray-400 text-xs italic">In Progress</span>;
     };
 
     const renderSAActions = () => {
-        if (status === 'PENDING_ASSESSMENT') {
+        if (status === 'Assigned') {
             return (
                 <button
-                    onClick={() => onAction('START_WIZARD', opportunity)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 font-medium text-xs transition-colors"
+                    onClick={() => onAction('START_ASSESSMENT', opportunity)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-medium text-xs transition-colors"
                 >
                     <Play size={14} /> Start Assessment
                 </button>
             );
         }
-        if (status === 'DRAFT') {
+        if (status === 'Draft') {
             return (
-                <button
-                    onClick={() => onAction('CONTINUE_WIZARD', opportunity)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 font-medium text-xs transition-colors"
-                >
-                    <Send size={14} /> Continue & Submit
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => onAction('SAVE_DRAFT', opportunity)}
+                        className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium text-xs transition-colors"
+                    >
+                        Save Draft
+                    </button>
+                    <button
+                        onClick={() => onAction('SUBMIT_SCORE', opportunity)}
+                        className="px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium text-xs transition-colors"
+                    >
+                        Submit Score
+                    </button>
+                </div>
             );
         }
-        return <span className="text-gray-400 text-xs italic">In Process</span>;
+        return <span className="text-gray-400 text-xs italic">Submitted</span>;
     };
 
     return (
         <div className="flex justify-end">
             {role === 'MANAGEMENT' && renderManagementActions()}
             {role === 'PRACTICE_HEAD' && renderPracticeHeadActions()}
-            {role === 'SA' && renderSAActions()}
+            {role === 'SOLUTION_ARCHITECT' && renderSAActions()}
         </div>
     );
 };

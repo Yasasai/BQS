@@ -39,7 +39,7 @@ export function Sidebar() {
     const [isOpen, setIsOpen] = useState(true);
     const navigate = useNavigate();
     const location = useLocation();
-    const { currentUser } = useUser();
+    const { currentUser, setRole } = useUser();
 
     if (!isOpen) return null;
 
@@ -49,7 +49,7 @@ export function Sidebar() {
     const getMenuItems = () => {
         const commonItems = [
             {
-                label: 'Home',
+                label: 'Dashboard',
                 icon: Home,
                 path: '/',
                 onClick: () => navigate('/')
@@ -57,7 +57,7 @@ export function Sidebar() {
         ];
 
         // MANAGEMENT (Top Level) - Views all opportunities, makes final decisions
-        if (currentUser.role === 'management') {
+        if (currentUser.role === 'MANAGEMENT') {
             return [
                 ...commonItems,
                 {
@@ -66,12 +66,6 @@ export function Sidebar() {
                     path: '/management',
                     onClick: () => navigate('/management'),
                     description: 'View submitted assessments and make final decisions'
-                },
-                {
-                    label: 'All Opportunities',
-                    icon: Briefcase,
-                    path: '/',
-                    onClick: () => navigate('/')
                 },
                 {
                     label: 'Analytics',
@@ -83,11 +77,11 @@ export function Sidebar() {
         }
 
         // PRACTICE HEAD - Assigns SAs AND Reviews Assessments (2 tabs in one page)
-        if (currentUser.role === 'practice_head') {
+        if (currentUser.role === 'PRACTICE_HEAD') {
             return [
                 ...commonItems,
                 {
-                    label: 'Opportunity Management',
+                    label: 'Governance Dashboard',
                     icon: Award,
                     path: '/practice-head-review',
                     onClick: () => navigate('/practice-head-review'),
@@ -103,7 +97,7 @@ export function Sidebar() {
         }
 
         // SOLUTION ARCHITECT - Scores assigned opportunities
-        if (currentUser.role === 'solution_architect') {
+        if (currentUser.role === 'SOLUTION_ARCHITECT') {
             return [
                 ...commonItems,
                 {
@@ -112,12 +106,6 @@ export function Sidebar() {
                     path: '/assigned-to-me',
                     onClick: () => navigate('/assigned-to-me'),
                     description: 'My assigned opportunities to score'
-                },
-                {
-                    label: 'All Opportunities',
-                    icon: Briefcase,
-                    path: '/',
-                    onClick: () => navigate('/')
                 }
             ];
         }
@@ -135,10 +123,9 @@ export function Sidebar() {
                     <ArrowLeft size={20} />
                 </button>
                 <div className="text-xs font-medium text-gray-600">
-                    {currentUser.role === 'management' && 'Management View'}
-                    {currentUser.role === 'management' && 'Management View'}
-                    {currentUser.role === 'practice_head' && 'Practice Head View'}
-                    {currentUser.role === 'solution_architect' && 'SA View'}
+                    {currentUser.role === 'MANAGEMENT' && 'Management View'}
+                    {currentUser.role === 'PRACTICE_HEAD' && 'Practice Head View'}
+                    {currentUser.role === 'SOLUTION_ARCHITECT' && 'SA View'}
                 </div>
             </div>
 
@@ -173,25 +160,34 @@ export function Sidebar() {
 
             {/* Footer - Role Switcher (for demo) */}
             <div className="border-t border-gray-200 p-4 bg-gray-50">
-                <div className="text-xs text-gray-500 mb-2">Demo: Switch View</div>
+                <div className="text-xs text-gray-500 mb-2 font-medium">Demo Role Switcher</div>
                 <div className="flex gap-2">
                     <button
-                        onClick={() => navigate('/management')}
-                        className="flex-1 text-xs px-2 py-1 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                        onClick={() => {
+                            setRole('MANAGEMENT');
+                            navigate('/');
+                        }}
+                        className={`flex-1 text-xs px-2 py-1.5 border rounded transition-colors ${currentUser.role === 'MANAGEMENT' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
                         title="Management View"
                     >
                         Mgmt
                     </button>
                     <button
-                        onClick={() => navigate('/')}
-                        className="flex-1 text-xs px-2 py-1 bg-blue-600 text-white border border-blue-600 rounded hover:bg-blue-700"
+                        onClick={() => {
+                            setRole('PRACTICE_HEAD');
+                            navigate('/');
+                        }}
+                        className={`flex-1 text-xs px-2 py-1.5 border rounded transition-colors ${currentUser.role === 'PRACTICE_HEAD' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
                         title="Practice Head View"
                     >
                         Practice
                     </button>
                     <button
-                        onClick={() => navigate('/assigned-to-me')}
-                        className="flex-1 text-xs px-2 py-1 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                        onClick={() => {
+                            setRole('SOLUTION_ARCHITECT');
+                            navigate('/');
+                        }}
+                        className={`flex-1 text-xs px-2 py-1.5 border rounded transition-colors ${currentUser.role === 'SOLUTION_ARCHITECT' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
                         title="Solution Architect View"
                     >
                         SA

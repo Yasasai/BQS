@@ -8,7 +8,7 @@ import os
 from dotenv import load_dotenv
 
 # Ensure init_db is imported
-from database import init_db, get_db, Opportunity, Assessment
+from database import init_db, get_db, Opportunity, Assessment, SessionLocal
 
 # Load environment variables from .env file if it exists (useful for local dev)
 load_dotenv()
@@ -16,7 +16,59 @@ load_dotenv()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Runs init_db immediately on startup
+    print("\n" + "="*60)
+    print("🚀 BQS Backend Starting...")
+    print("="*60)
+    
+    print("\n[1/2] Initializing database...")
     init_db()
+    print("✓ Database initialized")
+    
+    print("\n[2/2] Running self-healing migrations...")
+    try:
+        from sqlalchemy import inspect, text
+        from database import engine, Opportunity
+        
+        # Check if opportunities table exists and has all required columns
+        inspector = inspect(engine)
+        if 'opportunities' in inspector.get_table_names():
+            db_columns = {col['name'] for col in inspector.get_columns('opportunities')}
+            model_columns = {col.name for col in Opportunity.__table__.columns}
+            missing = model_columns - db_columns
+            
+            if missing:
+                print(f"⚠️  Detected {len(missing)} missing columns: {missing}")
+                print("🔧 Auto-healing database schema...")
+                
+                db = SessionLocal()
+                try:
+                    for col_name in missing:
+                        col = Opportunity.__table__.columns[col_name]
+                        col_type = col.type.compile(dialect=engine.dialect)
+                        nullable = "NULL" if col.nullable else "NOT NULL"
+                        
+                        sql = f"ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS {col_name} {col_type} {nullable}"
+                        print(f"  Adding: {col_name}")
+                        db.execute(text(sql))
+                        db.commit()
+                    print("✓ Schema healed successfully")
+                except Exception as e:
+                    db.rollback()
+                    print(f"⚠️  Warning: Could not auto-heal: {e}")
+                finally:
+                    db.close()
+            else:
+                print("✓ Schema is up to date")
+        else:
+            print("✓ Creating tables for the first time")
+            
+    except Exception as e:
+        print(f"⚠️  Self-healing check failed: {e}")
+    
+    print("\n" + "="*60)
+    print("✓ Backend Ready!")
+    print("="*60 + "\n")
+    
     yield
 
 # Updated Title
@@ -74,17 +126,15 @@ def trigger_sync(background_tasks: BackgroundTasks):
 def assign_solution_architect(id: int, assignment_data: dict, db: Session = Depends(get_db)):
     """
     Assign a Solution Architect to an opportunity.
-    Updates the sales_owner field with the primary SA name.
     """
     opp = db.query(Opportunity).filter(Opportunity.id == id).first()
     if not opp:
         raise HTTPException(status_code=404, detail="Opportunity not found")
     
-    # Update the sales_owner with the primary SA
-    opp.sales_owner = assignment_data.get("primarySA", "")
-    
-    # You can also store additional metadata if needed
-    # For now, we're just updating the sales_owner field
+    # Update the assigned_sa with the primary SA
+    opp.assigned_sa = assignment_data.get("primarySA", "")
+    opp.status = "Scoring Pending"
+    opp.workflow_status = "ASSIGNED_TO_SA"
     
     db.commit()
     db.refresh(opp)
@@ -92,7 +142,8 @@ def assign_solution_architect(id: int, assignment_data: dict, db: Session = Depe
     return {
         "message": "Solution Architect assigned successfully",
         "opportunity_id": id,
-        "assigned_to": opp.sales_owner
+        "assigned_to": opp.assigned_sa,
+        "status": opp.status
     }
 
 @app.post("/api/opportunities/{id}/assign-practice")
@@ -163,6 +214,84 @@ def final_governance_decision(id: int, data: dict, db: Session = Depends(get_db)
         
     db.commit()
     return {"status": "success", "new_status": opp.workflow_status}
+
+# --- NEW: Review & Approval Workflow Endpoints ---
+
+@app.post("/api/opportunities/{id}/send-to-practice-head")
+def send_to_practice_head(id: int, data: dict, db: Session = Depends(get_db)):
+    """
+    SA submits their completed score to the Practice Head for review.
+    Status: ASSIGNED_TO_SA or DRAFT_SCORE -> WAITING_PH_APPROVAL
+    """
+    opp = db.query(Opportunity).filter(Opportunity.id == id).first()
+    if not opp: 
+        raise HTTPException(404, "Opportunity not found")
+    
+    # Update the score if provided
+    if "score" in data:
+        opp.win_probability = data.get("score")
+    if "notes" in data:
+        opp.sa_notes = data.get("notes")
+    
+    opp.workflow_status = "WAITING_PH_APPROVAL"
+    db.commit()
+    db.refresh(opp)
+    
+    return {
+        "status": "success", 
+        "message": "Score submitted to Practice Head for review",
+        "new_status": opp.workflow_status
+    }
+
+@app.post("/api/opportunities/{id}/accept-score")
+def accept_score(id: int, data: dict, db: Session = Depends(get_db)):
+    """
+    Practice Head accepts the SA's score and endorses the bid.
+    Status: WAITING_PH_APPROVAL -> READY_FOR_MGMT_REVIEW
+    """
+    opp = db.query(Opportunity).filter(Opportunity.id == id).first()
+    if not opp: 
+        raise HTTPException(404, "Opportunity not found")
+    
+    # Store PH endorsement
+    opp.practice_head_recommendation = "APPROVED"
+    if "comments" in data:
+        opp.practice_head_notes = data.get("comments")
+    
+    opp.workflow_status = "READY_FOR_MGMT_REVIEW"
+    db.commit()
+    db.refresh(opp)
+    
+    return {
+        "status": "success",
+        "message": "Score accepted and forwarded to Management",
+        "new_status": opp.workflow_status
+    }
+
+@app.post("/api/opportunities/{id}/reject-score")
+def reject_score(id: int, data: dict, db: Session = Depends(get_db)):
+    """
+    Practice Head rejects the score and sends it back to SA for rework.
+    Status: WAITING_PH_APPROVAL -> ASSIGNED_TO_SA
+    """
+    opp = db.query(Opportunity).filter(Opportunity.id == id).first()
+    if not opp: 
+        raise HTTPException(404, "Opportunity not found")
+    
+    # Store rejection reason
+    opp.practice_head_recommendation = "REJECTED"
+    if "reason" in data:
+        opp.practice_head_notes = data.get("reason")
+    
+    opp.workflow_status = "ASSIGNED_TO_SA"
+    db.commit()
+    db.refresh(opp)
+    
+    return {
+        "status": "success",
+        "message": "Score rejected and returned to SA for rework",
+        "new_status": opp.workflow_status
+    }
 
 if __name__ == "__main__":
     # Local development entry point
