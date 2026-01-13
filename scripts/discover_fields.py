@@ -1,50 +1,41 @@
+
 import requests
 import os
+from dotenv import load_dotenv
 import json
 
-# Configuration
-ORACLE_BASE_URL = "https://eijs-test.fa.em2.oraclecloud.com"
-ORACLE_USERNAME = "yasasvi.upadrasta@inspiraenterprise.com"
-ORACLE_PASSWORD = "Welcome@123"
-ENDPOINT = "/crmRestApi/resources/latest/opportunities"
+load_dotenv()
+
+BASE_URL = os.getenv("ORACLE_BASE_URL")
+USER = os.getenv("ORACLE_USER")
+PASS = os.getenv("ORACLE_PASSWORD")
 
 def discover_fields():
-    print("Fetching one opportunity to discover fields...")
+    # Fetch a single record with ALL fields to see what's available
+    url = f"{BASE_URL}/crmRestApi/resources/latest/opportunities"
+    params = {"limit": 1}
     
-    url = f"{ORACLE_BASE_URL}{ENDPOINT}"
-    params = {
-        'limit': 1,
-        'q': 'StatusCode=OPEN'
-    }
+    print(f"Connecting to: {url}")
+    response = requests.get(url, auth=(USER, PASS), params=params)
     
-    try:
-        response = requests.get(
-            url, 
-            auth=(ORACLE_USERNAME, ORACLE_PASSWORD),
-            params=params, 
-            timeout=30
-        )
-        response.raise_for_status()
-        
-        data = response.json()
-        items = data.get('items', [])
-        
+    if response.ok:
+        items = response.json().get('items', [])
         if items:
-            print("\n✅ Successfully fetched an opportunity!")
-            item = items[0]
-            print("\nAvailable Fields:")
-            for key, value in item.items():
-                print(f"{key}: {value}")
-                
-            # Save to file for easy reading
-            with open('oracle_fields_dump.json', 'w') as f:
-                json.dump(item, f, indent=2)
-            print("\nSaved full field list to 'oracle_fields_dump.json'")
-        else:
-            print("No opportunities found.")
+            print("\n✅ Found Opportunity. Available fields:")
+            keys = sorted(items[0].keys())
+            for k in keys:
+                print(f"  - {k}")
             
-    except Exception as e:
-        print(f"Error: {e}")
+            # Specifically check for common synonyms
+            print("\nSearching for custom fields (ending in _c):")
+            custom = [k for k in keys if k.endswith('_c')]
+            for c in custom:
+                print(f"  - {c}")
+        else:
+            print("❌ No opportunities found in CRM.")
+    else:
+        print(f"❌ Failed: {response.status_code}")
+        print(response.text)
 
 if __name__ == "__main__":
     discover_fields()

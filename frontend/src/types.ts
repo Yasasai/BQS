@@ -16,6 +16,7 @@ export interface Opportunity {
     expected_po_date?: string; // Expected PO Date
     estimated_billing_date?: string; // Oracle Estimated Billing Date
     rfp_date?: string;
+    remote_url?: string;
     last_synced_at: string;
 
     // 3-Role Workflow Status

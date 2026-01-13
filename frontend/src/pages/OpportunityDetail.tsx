@@ -69,6 +69,17 @@ export function OpportunityDetail() {
                         <ChevronLeft size={16} />
                         Back
                     </button>
+                    {opportunity.remote_url && (
+                        <a
+                            href={opportunity.remote_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                        >
+                            Open in Oracle CRM
+                            <FileText size={14} />
+                        </a>
+                    )}
                 </div>
 
                 {/* Page Header */}
@@ -139,6 +150,16 @@ export function OpportunityDetail() {
                                         <p className="text-[13px] text-gray-900 font-medium">
                                             {opportunity.remote_id}
                                         </p>
+                                        {opportunity.remote_url && (
+                                            <a
+                                                href={opportunity.remote_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-[11px] text-blue-600 hover:underline flex items-center gap-1 mt-1 font-semibold"
+                                            >
+                                                Source API Link
+                                            </a>
+                                        )}
                                     </div>
 
                                     <div>

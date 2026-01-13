@@ -5,6 +5,8 @@ import { HelpCircle, Search, ChevronDown, MoreHorizontal } from 'lucide-react';
 import { TopBar } from '../components/TopBar';
 import { AssignPracticeModal } from '../components/AssignPracticeModal';
 import { FinalDecisionModal } from '../components/FinalDecisionModal';
+import { SyncStatusPopup } from '../components/SyncStatusPopup';
+import { Terminal } from 'lucide-react';
 
 type ListFilter = 'All Opportunities' | 'Approved by Practice' | 'Still with Practice';
 
@@ -18,6 +20,7 @@ export function ManagementDashboard() {
     // Modal states
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [isDecisionModalOpen, setIsDecisionModalOpen] = useState(false);
+    const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
     const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
     const [openActionMenu, setOpenActionMenu] = useState<number | null>(null);
 
@@ -84,9 +87,20 @@ export function ManagementDashboard() {
 
             {/* Header Controls Area */}
             <div className="bg-white px-4 py-4 space-y-4">
-                <div className="flex items-center gap-1">
-                    <h1 className="text-xl font-normal text-gray-700">Management Insights & Decisions</h1>
-                    <HelpCircle size={14} className="text-gray-400 cursor-help" />
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                        <h1 className="text-xl font-normal text-gray-700">Management Insights & Decisions</h1>
+                        <HelpCircle size={14} className="text-gray-400 cursor-help" />
+                    </div>
+
+                    {/* CRM Sync Button */}
+                    <button
+                        onClick={() => setIsSyncModalOpen(true)}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20"
+                    >
+                        <Terminal size={14} />
+                        CRM Sync Status
+                    </button>
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -129,7 +143,7 @@ export function ManagementDashboard() {
                     </div>
 
                     {/* Actions Area */}
-                    <div className="flex items-center gap-2 pr-2">
+                    <div className="flex items-center gap-2 pr-2 border-l border-gray-200 pl-4">
                         <button className="flex items-center gap-4 px-4 py-1.5 border border-gray-300 rounded bg-white hover:bg-gray-50 text-gray-700 shadow-sm transition-all group">
                             Actions
                             <ChevronDown size={14} className="text-gray-400 group-hover:text-gray-600" />
@@ -196,6 +210,16 @@ export function ManagementDashboard() {
                                         {openActionMenu === opp.id && (
                                             <div className="absolute right-4 mt-1 w-48 bg-white border border-gray-200 rounded shadow-xl z-50 py-1 text-left overflow-hidden translate-y-0">
                                                 <button onClick={() => navigate(`/opportunity/${opp.id}`)} className="block w-full px-4 py-2 hover:bg-gray-50">View Details</button>
+                                                {opp.remote_url && (
+                                                    <a
+                                                        href={opp.remote_url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="block w-full px-4 py-2 hover:bg-gray-50 text-blue-600 border-b border-gray-100"
+                                                    >
+                                                        View in Oracle CRM
+                                                    </a>
+                                                )}
                                                 {opp.workflow_status === 'NEW_FROM_CRM' && (
                                                     <button onClick={() => { setSelectedOpportunity(opp); setIsAssignModalOpen(true); setOpenActionMenu(null); }} className="block w-full px-4 py-2 hover:bg-gray-50 text-blue-600 font-medium">Assign to Practice</button>
                                                 )}
@@ -214,6 +238,11 @@ export function ManagementDashboard() {
                     </tbody>
                 </table>
             </div>
+
+            <SyncStatusPopup
+                isOpen={isSyncModalOpen}
+                onClose={() => setIsSyncModalOpen(false)}
+            />
 
             {selectedOpportunity && (
                 <>
@@ -234,3 +263,4 @@ export function ManagementDashboard() {
         </div>
     );
 }
+
