@@ -1,49 +1,54 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-export type UserRole = 'MANAGEMENT' | 'PRACTICE_HEAD' | 'SOLUTION_ARCHITECT';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-interface User {
-    id: string;
-    name: string;
+export interface User {
+    user_id: string;
+    display_name: string;
     email: string;
-    role: UserRole;
+    roles: string[];
 }
 
 interface UserContextType {
-    currentUser: User;
-    setCurrentUser: (user: User) => void;
-    setRole: (role: UserRole) => void;
+    currentUser: User | null;
+    availableUsers: User[];
+    switchUser: (userId: string) => void;
+    isLoading: boolean;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export const useUser = () => {
     const context = useContext(UserContext);
-    if (!context) {
-        throw new Error('useUser must be used within UserProvider');
-    }
+    if (!context) throw new Error('useUser must be used within UserProvider');
     return context;
 };
 
-interface UserProviderProps {
-    children: ReactNode;
-}
+export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
-    // Default user - Practice Head who assigns and reviews
-    const [currentUser, setCurrentUser] = useState<User>({
-        id: '1',
-        name: 'Bid Team User',
-        email: 'user@inspiraenterprise.com',
-        role: 'PRACTICE_HEAD' // Default role
-    });
+    useEffect(() => {
+        fetch('http://localhost:8000/api/auth/users')
+            .then(res => res.json())
+            .then(data => {
+                setAvailableUsers(data);
+                if (data.length > 0) setCurrentUser(data[0]);
+                setIsLoading(false);
+            })
+            .catch(err => {
+                console.error(err);
+                setIsLoading(false);
+            });
+    }, []);
 
-    const setRole = (role: UserRole) => {
-        setCurrentUser(prev => ({ ...prev, role }));
+    const switchUser = (id: string) => {
+        const u = availableUsers.find(x => x.user_id === id);
+        if (u) setCurrentUser(u);
     };
 
     return (
-        <UserContext.Provider value={{ currentUser, setCurrentUser, setRole }}>
+        <UserContext.Provider value={{ currentUser, availableUsers, switchUser, isLoading }}>
             {children}
         </UserContext.Provider>
     );

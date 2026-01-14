@@ -3,21 +3,32 @@ import sys
 print("--- 🚀 Script Started 🚀 ---")
 import logging
 from datetime import datetime
-# --- CONFIGURATION: DIRECT CREDENTIALS (NO .ENV FILE) ---
-# To remove the link with .env, we set the variables explicitly here.
-# This ensures downstream modules (oracle_service) find them in os.environ.
+# --- CONFIGURATION: Load from .env file ---
+from dotenv import load_dotenv
 
-os.environ["ORACLE_USER"] = "yasasvi.upadrasta@inspiraenterprise.com"
-os.environ["ORACLE_PASSWORD"] = "Welcome@123"
-os.environ["ORACLE_BASE_URL"] = "https://eijs-test.fa.em2.oraclecloud.com"
-# Optional: Set DATABASE_URL if needed, otherwise it uses default
+# Load environment variables from .env file
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path=env_path)
+
+# Set environment variables (with fallback for local development)
+os.environ["ORACLE_USER"] = os.getenv("ORACLE_USER", "")
+os.environ["ORACLE_PASSWORD"] = os.getenv("ORACLE_PASSWORD", "")
+os.environ["ORACLE_BASE_URL"] = os.getenv("ORACLE_BASE_URL", "https://eijs-test.fa.em2.oraclecloud.com")
+
 if not os.getenv("DATABASE_URL"):
-     os.environ["DATABASE_URL"] = "postgresql://postgres:Abcd1234@127.0.0.1:5432/bqs"
+    os.environ["DATABASE_URL"] = os.getenv("DATABASE_URL", "postgresql://postgres:password@127.0.0.1:5432/bqs")
 
-USERNAME = os.environ["ORACLE_USER"]
-PASSWORD = os.environ["ORACLE_PASSWORD"]
+USERNAME = os.environ.get("ORACLE_USER")
+PASSWORD = os.environ.get("ORACLE_PASSWORD")
 
-print(f"✅ Credentials configured directly (User: {USERNAME})")
+if not USERNAME or not PASSWORD:
+    print("❌ ERROR: ORACLE_USER and ORACLE_PASSWORD must be set in .env file")
+    print("Create a .env file with:")
+    print("ORACLE_USER=your_username")
+    print("ORACLE_PASSWORD=your_password")
+    sys.exit(1)
+
+print(f"✅ Credentials loaded from .env (User: {USERNAME})")
 
 # Add backend to path
 sys.path.append(os.path.join(os.getcwd(), 'backend'))

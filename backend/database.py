@@ -1,228 +1,201 @@
+
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, JSON, ForeignKey, Text
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 from datetime import datetime
 import os
+import uuid
 
 # Database Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Abcd1234@127.0.0.1:5432/bqs")
 
-def init_db():
-    """Consolidated logic to ensure DB exists, tables are created, and columns are synchronized."""
-    from sqlalchemy import inspect, text
+Base = declarative_base()
+
+# --- 1. REFERENCE / SECURITY ---
+
+class AppUser(Base):
+    __tablename__ = "app_user"
+    user_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    email = Column(String, unique=True, nullable=False)
+    display_name = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
     
+    # Relationships
+    user_roles = relationship("UserRole", back_populates="user")
+
+class Role(Base):
+    __tablename__ = "role"
+    role_id = Column(Integer, primary_key=True) # 1=Admin, 2=SA, etc
+    role_code = Column(String, unique=True)     # SA, SALES_LEAD
+    role_name = Column(String)
+
+class UserRole(Base):
+    __tablename__ = "user_role"
+    user_id = Column(String, ForeignKey("app_user.user_id"), primary_key=True)
+    role_id = Column(Integer, ForeignKey("role.role_id"), primary_key=True)
+    
+    user = relationship("AppUser", back_populates="user_roles")
+    role = relationship("Role")
+
+# --- 2. CRM SYNCED CORE ---
+
+class Practice(Base):
+    __tablename__ = "practice"
+    practice_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    practice_code = Column(String, unique=True) 
+    practice_name = Column(String, nullable=False)
+
+class Opportunity(Base):
+    __tablename__ = "opportunity"
+    
+    opp_id = Column(String, primary_key=True) # The Oracle OptyId
+    opp_number = Column(String) 
+    
+    opp_name = Column(String, nullable=False)
+    customer_name = Column(String, nullable=False)
+    geo = Column(String, nullable=True)
+    currency = Column(String, nullable=True)
+    deal_value = Column(Float, nullable=True)
+    stage = Column(String, nullable=True)
+    close_date = Column(DateTime, nullable=True)
+    
+    sales_owner_user_id = Column(String, ForeignKey("app_user.user_id"), nullable=True)
+    primary_practice_id = Column(String, ForeignKey("practice.practice_id"), nullable=True)
+    
+    crm_last_updated_at = Column(DateTime, nullable=False)
+    local_last_synced_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+    # Relationships
+    assignments = relationship("OpportunityAssignment", back_populates="opportunity")
+    score_versions = relationship("OppScoreVersion", back_populates="opportunity")
+
+class SyncRun(Base):
+    __tablename__ = "sync_run"
+    sync_run_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    status = Column(String) 
+    started_at = Column(DateTime, default=datetime.utcnow)
+    ended_at = Column(DateTime, nullable=True)
+    rows_upserted = Column(Integer, default=0)
+    error_message = Column(Text, nullable=True)
+
+# --- 3. ASSIGNMENT ---
+
+class OpportunityAssignment(Base):
+    __tablename__ = "opportunity_assignment"
+    assignment_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    opp_id = Column(String, ForeignKey("opportunity.opp_id"), nullable=False)
+    assigned_to_user_id = Column(String, ForeignKey("app_user.user_id"), nullable=False)
+    assigned_by_user_id = Column(String, ForeignKey("app_user.user_id"), nullable=False)
+    assigned_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, default="ACTIVE") # ACTIVE, REVOKED
+
+    opportunity = relationship("Opportunity", back_populates="assignments")
+
+# --- 4. SCORING ---
+
+class OppScoreVersion(Base):
+    __tablename__ = "opp_score_version"
+    score_version_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    opp_id = Column(String, ForeignKey("opportunity.opp_id"), nullable=False)
+    version_no = Column(Integer, nullable=False)
+    status = Column(String, nullable=False) # DRAFT, SUBMITTED
+    
+    overall_score = Column(Integer, nullable=True)
+    confidence_level = Column(String, nullable=True) 
+    recommendation = Column(String, nullable=True)   
+    summary_comment = Column(Text, nullable=True)
+    
+    created_by_user_id = Column(String, ForeignKey("app_user.user_id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    submitted_at = Column(DateTime, nullable=True)
+
+    opportunity = relationship("Opportunity", back_populates="score_versions")
+    section_values = relationship("OppScoreSectionValue", back_populates="score_version")
+
+class OppScoreSection(Base):
+    __tablename__ = "opp_score_section"
+    section_code = Column(String, primary_key=True) 
+    section_name = Column(String)
+    display_order = Column(Integer)
+    weight = Column(Float, default=1.0)
+
+class OppScoreSectionValue(Base):
+    __tablename__ = "opp_score_section_value"
+    score_value_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    score_version_id = Column(String, ForeignKey("opp_score_version.score_version_id"), nullable=False)
+    section_code = Column(String, ForeignKey("opp_score_section.section_code"), nullable=False)
+    
+    score = Column(Integer, nullable=False) # 1..5
+    notes = Column(Text, nullable=True)
+
+    score_version = relationship("OppScoreVersion", back_populates="section_values")
+
+# --- 6. SETUP & SEEDING ---
+
+def init_db():
     try:
-        # 1. Ensure the PostgreSQL database 'bqs' exists
         conn = psycopg2.connect(dbname='postgres', user='postgres', host='127.0.0.1', password='Abcd1234', port=5432)
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         with conn.cursor() as cur:
             cur.execute("SELECT 1 FROM pg_catalog.pg_database WHERE datname = 'bqs'")
             if not cur.fetchone():
                 cur.execute("CREATE DATABASE bqs")
+                print("✅ Database 'bqs' created.")
         conn.close()
     except Exception as e:
         print(f"Startup DB Check: {e}")
 
-    # Create engine with robust connection pooling
-    engine = create_engine(
-        DATABASE_URL,
-        pool_pre_ping=True,   # Check if connection is alive before using
-        pool_recycle=1800     # Recycle connections every 30 minutes
-    )
-    
-    # 2. Create Base tables if they don't exist
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
     Base.metadata.create_all(bind=engine)
     
-    # 3. SELF-HEALING: Check for missing columns in existing tables
-    inspector = inspect(engine)
-    existing_tables = inspector.get_table_names()
-    
-    session_factory = sessionmaker(bind=engine)
-    db = session_factory()
+    # Seed Data
+    Session = sessionmaker(bind=engine)
+    db = Session()
     try:
-        for table_name, table in Base.metadata.tables.items():
-            if table_name in existing_tables:
-                # Compare model columns vs DB columns
-                db_columns = {col['name'] for col in inspector.get_columns(table_name)}
-                model_columns = {col.name for col in table.columns}
-                missing = model_columns - db_columns
-                
-                if missing:
-                    print(f"🔧 Healing table '{table_name}' (missing: {missing})")
-                    for col_name in missing:
-                        col = table.columns[col_name]
-                        col_type = col.type.compile(dialect=engine.dialect)
-                        nullable = "NULL" if col.nullable else "NOT NULL"
-                        # Standard SQL to add column if not exists
-                        sql = f'ALTER TABLE "{table_name}" ADD COLUMN IF NOT EXISTS {col_name} {col_type} {nullable}'
-                        db.execute(text(sql))
-                    db.commit()
+        # Roles
+        if not db.query(Role).first():
+            db.add_all([
+                Role(role_id=1, role_code="SALES_LEAD", role_name="Sales Lead"),
+                Role(role_id=2, role_code="SA", role_name="Solution Architect")
+            ])
+            db.flush()
+
+        # Users
+        if not db.query(AppUser).filter_by(email="kunal.lead@example.com").first():
+            kunal = AppUser(email="kunal.lead@example.com", display_name="Kunal (Lead)")
+            db.add(kunal)
+            db.flush()
+            db.add(UserRole(user_id=kunal.user_id, role_id=1))
+            
+        if not db.query(AppUser).filter_by(email="sa.demo@example.com").first():
+            sa = AppUser(email="sa.demo@example.com", display_name="Demo SA")
+            db.add(sa)
+            db.flush()
+            db.add(UserRole(user_id=sa.user_id, role_id=2))
+
+        # Sections
+        if not db.query(OppScoreSection).first():
+            db.add_all([
+                OppScoreSection(section_code="FIT", section_name="Fit & Strategic Alignment", display_order=1),
+                OppScoreSection(section_code="DELIVERY", section_name="Delivery Readiness", display_order=2),
+                OppScoreSection(section_code="COMMERCIAL", section_name="Commercial Attractiveness", display_order=3),
+                OppScoreSection(section_code="RISK", section_name="Risk & Complexity", display_order=4)
+            ])
+            
+        db.commit()
     except Exception as e:
         db.rollback()
-        print(f"⚠️  Self-healing Warning: {e}")
+        print(f"Seeding Error: {e}")
     finally:
         db.close()
 
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-    pool_recycle=1800
-)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-Base = declarative_base()
-
-# --- Models ---
-
-class Opportunity(Base):
-    __tablename__ = "opportunities"
-
-    id = Column(Integer, primary_key=True, index=True)
-    remote_id = Column(String, unique=True, index=True) # Oracle Opportunity Number
-    name = Column(String)                               # Oracle Name
-    customer = Column(String)                           # Oracle Account
-    practice = Column(String)                           # Oracle Practice
-    geo = Column(String)                                # GEO
-    region = Column(String)                             # Region
-    sector = Column(String)                             # Sector
-    deal_value = Column(Float)
-    currency = Column(String, default="USD")
-    win_probability = Column(Float)                     # Oracle Win (%)
-    sales_owner = Column(String)                        # Oracle Owner
-    stage = Column(String)                               # Oracle Sales Stage (e.g., Bid Preparation)
-    
-    # Dates
-    expected_po_date = Column(String)                   # Expected PO Date
-    estimated_billing_date = Column(String)             # Oracle Estimated Billing Date
-    close_date = Column(String)
-    
-    # --- STRICT STATE MACHINE ---
-    # NEW | ASSIGNED_TO_PRACTICE | PENDING_ASSESSMENT | ...
-    # mapped to user-friendly labels: New from CRM, Scoring Pending, etc.
-    workflow_status = Column(String, default="New from CRM")
-    status = Column(String, default="New from CRM") # Redundant but safe for frontend
-    
-    # Ownership
-    assigned_sa = Column(String) # Solution Architect
-    sa_owner = Column(String)    # redundant but used in some endpoints
-    
-    # Metadata for Governance
-    sa_notes = Column(Text)
-    practice_head_recommendation = Column(String) # APPROVE | REJECT
-    practice_head_notes = Column(Text) # PH comments/rejection reasons
-    assigned_practice = Column(String) # Practice assigned by management
-    management_decision = Column(String) # BID | NO_BID
-    close_reason = Column(Text)
-    description = Column(Text)  # Added to primary model for easy UI access
-    remote_url = Column(String) # Link back to Oracle CRM
-    
-    last_synced_at = Column(DateTime, default=datetime.utcnow)
-    assessments = relationship("Assessment", back_populates="opportunity")
-
-class Assessment(Base):
-    __tablename__ = "assessments"
-
-    id = Column(Integer, primary_key=True, index=True)
-    opp_id = Column(Integer, ForeignKey("opportunities.id"))
-    version = Column(String)
-    
-    scores = Column(JSON)
-    comments = Column(Text)
-    risks = Column(JSON)
-    
-    is_submitted = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    created_by = Column(String)
-
-    opportunity = relationship("Opportunity", back_populates="assessments")
-
-class User(Base):
-    __tablename__ = "users"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True)
-    name = Column(String)
-    role = Column(String)
-
-class SyncLog(Base):
-    """Track Oracle CRM sync operations"""
-    __tablename__ = "sync_logs"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    sync_type = Column(String)  # FULL or INCREMENTAL
-    status = Column(String)  # RUNNING, SUCCESS, FAILED
-    
-    total_fetched = Column(Integer, default=0)
-    new_records = Column(Integer, default=0)
-    updated_records = Column(Integer, default=0)
-    failed_records = Column(Integer, default=0)
-    
-    error_message = Column(String, nullable=True)
-    sync_metadata = Column(JSON, nullable=True)  # Renamed from 'metadata' (reserved word)
-    
-    started_at = Column(DateTime, default=datetime.utcnow)
-    completed_at = Column(DateTime, nullable=True)
-    duration_seconds = Column(Integer, nullable=True)
-
-class OpportunityIDLog(Base):
-    """Track historical changes for specific opportunities"""
-    __tablename__ = "opportunity_id_logs"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    opp_id = Column(String, index=True) # remote_id
-    field_name = Column(String)
-    old_value = Column(String)
-    new_value = Column(String)
-    changed_at = Column(DateTime, default=datetime.utcnow)
-    sync_id = Column(Integer, ForeignKey("sync_logs.id"))
-
-class OpportunityDetails(Base):
-    """Extended details captured from Oracle CRM UI fields"""
-    __tablename__ = "opportunity_details"
-
-    id = Column(Integer, primary_key=True, index=True)
-    opty_number = Column(String, unique=True, index=True) # Master reference
-    opty_id = Column(String)                             # Technical ID
-    name = Column(String)
-    account_name = Column(String)
-    
-    # Financials
-    revenue = Column(Float, default=0.0)
-    currency_code = Column(String, default="USD")
-    win_probability = Column(Float, default=0.0)
-    
-    # Taxonomy
-    practice = Column(String)
-    geo = Column(String)
-    region = Column(String)
-    business_unit = Column(String)
-    customer_sponsor = Column(String)
-    primary_partner = Column(String)
-    
-    # Ownership & People
-    owner_name = Column(String)
-    primary_contact = Column(String)
-    
-    # Status & Dates
-    sales_stage = Column(String)
-    sales_method = Column(String)
-    status_code = Column(String)
-    status_label = Column(String)
-    
-    close_date = Column(String)
-    effective_date = Column(String)
-    last_update_date = Column(DateTime)
-    creation_date = Column(DateTime)
-    
-    # Metadata
-    description = Column(Text)
-    raw_json = Column(JSON) # Store full Oracle JSON for auditing
-    remote_url = Column(String) # Link back to Oracle CRM
-    last_synced_at = Column(DateTime, default=datetime.utcnow)
-
 def get_db():
-    """Dependency for DB session."""
     db = SessionLocal()
     try:
         yield db

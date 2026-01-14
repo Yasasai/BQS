@@ -1,0 +1,9 @@
+# Oracle API Configuration (Auto-discovered)
+ORACLE_BASE_URL=https://eijs-test.fa.em2.oraclecloud.com/crmRestApi/resources/latest
+ORACLE_API_VERSION=latest
+ORACLE_OPPORTUNITIES_ENDPOINT=https://eijs-test.fa.em2.oraclecloud.com/crmRestApi/resources/latest/opportunities
+
+# Full URL for opportunities:
+# https://eijs-test.fa.em2.oraclecloud.com/crmRestApi/resources/latest/opportunities
+
+# Generated: 2026-01-14 14:06:36.786047

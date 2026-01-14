@@ -125,11 +125,6 @@ def get_auth_header():
 
 def get_all_opportunities(batch_size=10, since_date=None):
     """Batch Opportunity Fetching (Generator Pattern) - Primary Sync Logic"""
-    fields = (
-        "OptyId,OptyNumber,Name,Revenue,CurrencyCode,"
-        "WinProb,SalesStage,OwnerName,"
-        "EffectiveDate,LastUpdateDate,CreationDate,CloseDate,StatusCode"
-    )
     
     offset = 0
     total_count = 0
@@ -139,16 +134,13 @@ def get_all_opportunities(batch_size=10, since_date=None):
     
     while total_count < MAX_RECORDS:
         params = {
-            # "fields": fields,
             "onlyData": "true",
             "limit": batch_size,
             "offset": offset,
-            # Added RecordSet=ALL to match UI 'All Opportunities' view
             "q": "RecordSet='ALL'"
         }
         
         if since_date:
-            # Append date filter to RecordSet
             oracle_date = since_date.replace('T', ' ')
             params["q"] += f";LastUpdateDate > '{oracle_date}'"
             print(f"DEBUG: Incremental Sync Query: {params['q']}")
@@ -165,34 +157,25 @@ def get_all_opportunities(batch_size=10, since_date=None):
         
         # --- NEW: Aggressive Discovery Logic ---
         if not items and not since_date and offset == 0:
-            logger.warning("⚠️  Zero records found in Initial Attempt. Fetching API Metadata to verify fields...")
-            metadata = get_from_oracle("opportunities/describe")
-            if "attributes" in metadata:
-                attr_names = [a.get('name') for a in metadata.get('attributes', [])]
-                logger.info(f"📋 AVAILABLE FIELDS IN ORACLE: {attr_names}")
-            
-            logger.warning("⚠️  Retrying with 'OptyId > 0' filter...")
+            logger.warning("⚠️  Zero records found. Trying with 'OptyId > 0' filter...")
             params["q"] = "OptyId > 0"
             data = get_from_oracle("opportunities", params=params)
             items = data.get("items", [])
             
             if not items:
-                logger.warning("⚠️  Still 0 records. Trying specifically for OptyNumber known to user...")
-                # Try fetching just the one we know exists 1602737
+                logger.warning("⚠️  Still 0 records. Trying specifically for OptyNumber 1602737...")
                 single = fetch_single_opportunity("1602737")
                 if single:
-                    logger.info("✅ SUCCESS: Found Opportunity 1602737 specifically.")
                     items = [single]
         # -----------------------------------------
             
-        # DEBUG: Verify structure
         if "items" not in data and offset == 0:
-            logger.warning(f"⚠️  Key 'items' missing from response! Available keys: {list(data.keys())}")
+             logger.warning(f"⚠️  Key 'items' missing. Keys: {list(data.keys())}")
         else:
-            logger.info(f"✅ Found {len(items)} items in this batch.")
+             logger.info(f"✅ Found {len(items)} items in this batch.")
             
         if not items: 
-            logger.info("ℹ️  No items returned in this batch, ending fetch.")
+            logger.info("ℹ️  No items returned, ending fetch.")
             break
             
         total_count += len(items)

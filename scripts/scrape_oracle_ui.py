@@ -12,17 +12,25 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 # Add parent directory to path to find backend modules if needed
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-# --- CONFIGURATION (Hardcoded for Robustness as requested) ---
-ORACLE_USER = "yasasvi.upadrasta@inspiraenterprise.com"
-ORACLE_PASS = "Welcome@123"
-ORACLE_URL = "https://eijs-test.fa.em2.oraclecloud.com"
-OPTY_LIST_URL = "https://eijs-test.fa.em2.oraclecloud.com/fscmUI/faces/FndOverview?fndGlobalItemNodeId=MOO_OPPTY"
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
 
-# Database Config (Matches project .env)
-DB_HOST = "127.0.0.1"
-DB_NAME = "bqs"
-DB_USER = "postgres"
-DB_PASS = "Abcd1234"
+# --- CONFIGURATION ---
+ORACLE_USER = os.getenv("ORACLE_USER", "")
+ORACLE_PASS = os.getenv("ORACLE_PASSWORD", "")
+ORACLE_URL = os.getenv("ORACLE_BASE_URL", "https://eijs-test.fa.em2.oraclecloud.com")
+OPTY_LIST_URL = f"{ORACLE_URL}/fscmUI/faces/FndOverview?fndGlobalItemNodeId=MOO_OPPTY"
+
+# Database Config
+DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
+DB_NAME = os.getenv("DB_NAME", "bqs")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASS = os.getenv("DB_PASSWORD", "password")
+
+if not ORACLE_USER or not ORACLE_PASS:
+    print("❌ ERROR: ORACLE_USER and ORACLE_PASSWORD must be set in .env file")
+    sys.exit(1)
 
 def get_db_connection():
     return psycopg2.connect(

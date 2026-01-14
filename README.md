@@ -1,306 +1,152 @@
 # BQS - Bid Qualification System
 
-**Professional workflow management system for bid qualification with Oracle CRM integration.**
+Oracle CRM to PostgreSQL synchronization system with FastAPI backend and React frontend.
 
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-18+-61DAFB.svg)](https://reactjs.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-336791.svg)](https://www.postgresql.org/)
+## Features
 
----
+- 🔄 **Automated Oracle CRM Sync** - Daily scheduled synchronization
+- 🗄️ **Self-Healing Database** - Automatic schema migrations
+- 🌐 **REST API** - FastAPI backend with comprehensive endpoints
+- 🔍 **Multiple Sync Methods**:
+  - REST API sync (for users with API access)
+  - UI Scraper (Selenium-based for restricted accounts)
+  - Name-based fetching (for specific opportunities)
+- 📊 **Comprehensive Data Capture** - Stores full opportunity details and raw JSON
 
-## 🚀 Quick Start (For Anyone)
+## Quick Start
 
-**Clone and run in 3 commands:**
-
+### 1. Clone Repository
 ```bash
 git clone <your-repo-url>
 cd BQS
-python scripts/setup_project.py --with-data
 ```
 
-That's it! The script handles everything:
-- ✅ Creates virtual environment
-- ✅ Installs all dependencies (Python + Node.js)
-- ✅ Sets up PostgreSQL database
-- ✅ Populates test data
-- ✅ Ready to run!
+### 2. Create `.env` File
+Create a `.env` file in the root directory:
+```env
+ORACLE_USER=your_oracle_username
+ORACLE_PASSWORD=your_oracle_password
+ORACLE_BASE_URL=https://eijs-test.fa.em2.oraclecloud.com
+DATABASE_URL=postgresql://postgres:your_db_password@127.0.0.1:5432/bqs
+```
 
----
+### 3. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
 
-## 📋 Prerequisites
+### 4. Run Backend
+```bash
+python backend/main.py
+```
 
-- **Python 3.8+**
-- **Node.js 16+**
-- **PostgreSQL 14+**
+The server will start at `http://localhost:8000`
 
----
+## Sync Methods
 
-## 🏗️ Project Structure
+### Method 1: Automated API Sync (Recommended if you have API access)
+The backend automatically syncs daily at midnight. To trigger manually:
+```bash
+curl -X POST http://localhost:8000/api/sync-database
+```
+
+Or run the script:
+```bash
+python refined_sync_script.py
+```
+
+### Method 2: UI Scraper (For restricted API access)
+Uses Selenium to scrape the Oracle UI:
+```bash
+python scripts/scrape_oracle_ui.py
+```
+
+**Prerequisites**: Chrome browser installed
+
+### Method 3: Fetch by Names
+If you know specific opportunity names:
+```bash
+python fetch_by_names.py
+```
+
+Edit the script to add opportunity names from your dashboard.
+
+## Project Structure
 
 ```
 BQS/
-├── backend/                 # FastAPI backend
-│   ├── main.py             # API server (auto-heals on startup)
-│   ├── database.py         # Database models
-│   ├── constants.py        # Shared enums (no magic strings!)
-│   ├── requirements.txt    # Python dependencies
-│   └── venv/               # Virtual environment (gitignored)
-│
-├── frontend/               # React frontend
-│   ├── src/
-│   │   ├── pages/          # Dashboard pages
-│   │   ├── components/     # Reusable components
-│   │   └── types.ts        # TypeScript types
-│   ├── package.json
-│   └── node_modules/       # (gitignored)
-│
-├── scripts/                # Utility scripts
-│   ├── setup_project.py    # 🌟 Universal setup (run this first!)
-│   ├── db_manager.py       # Database management
-│   └── sync_oracle_master.py  # Oracle CRM sync
-│
-└── .gitignore              # Professional git hygiene
+├── backend/
+│   ├── main.py              # FastAPI application
+│   ├── database.py          # SQLAlchemy models
+│   ├── oracle_service.py    # Oracle API integration
+│   └── sync_manager.py      # Sync orchestration
+├── scripts/
+│   └── scrape_oracle_ui.py  # Selenium UI scraper
+├── frontend/                # React application
+├── refined_sync_script.py   # Manual sync script
+├── fetch_by_names.py        # Name-based fetcher
+├── verify_details.py        # Data verification tool
+├── requirements.txt         # Python dependencies
+└── .env                     # Configuration (create locally)
 ```
 
----
+## API Endpoints
 
-## 🎯 Running the Application
+- `GET /api/opportunities` - List all opportunities
+- `GET /api/oracle-opportunity/{id}` - Get single opportunity with details
+- `POST /api/sync-database` - Trigger manual sync
+- `GET /api/sync-status` - Get last sync status
+- `GET /api/sync-history` - View sync history
 
-### Option 1: Automated Setup (Recommended)
+## Database Schema
 
+### `opportunities` Table
+Primary opportunity data from Oracle CRM
+
+### `opportunity_details` Table
+Extended details including:
+- Owner and contact information
+- Financial details
+- Raw JSON from Oracle API (for auditing)
+
+### `sync_logs` Table
+Tracks all sync operations with statistics
+
+## Troubleshooting
+
+### "0 opportunities synced"
+- **Cause**: User doesn't have REST API access
+- **Solution**: Use the UI scraper (`scripts/scrape_oracle_ui.py`)
+
+### "404 Not Found" on API calls
+- **Cause**: Incorrect API version
+- **Solution**: Check Oracle admin for correct API endpoint
+
+### Database connection errors
+- Verify PostgreSQL is running
+- Check `DATABASE_URL` in `.env`
+- Ensure database `bqs` exists
+
+## Development
+
+### Run Tests
 ```bash
-# Complete setup + test data
-python scripts/setup_project.py --with-data
-
-# Then start the servers:
-# Terminal 1 - Backend
-cd backend
-venv\Scripts\python main.py  # Windows
-# venv/bin/python main.py    # Mac/Linux
-
-# Terminal 2 - Frontend
-cd frontend
-npm run dev
+python verify_details.py
 ```
 
-### Option 2: Manual Setup
+### View Logs
+Check console output when running `backend/main.py`
 
-```bash
-# Backend
-cd backend
-python -m venv venv
-venv\Scripts\activate  # Windows
-# source venv/bin/activate  # Mac/Linux
-pip install -r requirements.txt
-python main.py
+## Security
 
-# Frontend (new terminal)
-cd frontend
-npm install
-npm run dev
-```
+- Never commit `.env` file (already in `.gitignore`)
+- Credentials are loaded from environment variables only
+- No hardcoded passwords in source code
 
-**Open:** http://localhost:5173
+## License
 
----
+Internal use only - Inspira Enterprise
 
-## 🔧 Database Management
+## Support
 
-### Self-Healing Database
-
-The backend **automatically heals** the database schema on startup:
-- Detects missing columns
-- Adds them without data loss
-- Never breaks on schema changes
-
-### Manual Database Commands
-
-```bash
-# Check database status
-python scripts/db_manager.py check
-
-# Fix schema issues
-python scripts/db_manager.py heal
-
-# Populate test data
-python scripts/db_manager.py populate
-
-# Reset everything (heal + populate)
-python scripts/db_manager.py reset
-```
-
----
-
-## 🔄 Oracle CRM Synchronization
-
-### Self-Healing Sync
-
-The sync script uses **UPSERT logic** (INSERT ... ON CONFLICT DO UPDATE):
-- ✅ Updates existing opportunities
-- ✅ Inserts new opportunities
-- ✅ No duplicate errors
-- ✅ Can run every 5 minutes safely
-
-```bash
-# Sync from Oracle CRM
-python scripts/sync_oracle_master.py
-
-# Sync + mark stale records
-python scripts/sync_oracle_master.py --clean
-```
-
-### Configuration
-
-Set these environment variables (or edit `scripts/sync_oracle_master.py`):
-
-```bash
-ORACLE_BASE_URL=https://your-oracle-instance.com
-ORACLE_USERNAME=your_username
-ORACLE_PASSWORD=your_password
-```
-
----
-
-## 📊 Workflow Stages
-
-| Status | Description | Who Acts |
-|--------|-------------|----------|
-| `NEW_FROM_CRM` | Fresh from Oracle | Management |
-| `ASSIGNED_TO_PRACTICE` | Practice assigned | Practice Head |
-| `ASSIGNED_TO_SA` | SA working on it | Solution Architect |
-| `WAITING_PH_APPROVAL` | Awaiting PH review | Practice Head |
-| `READY_FOR_MGMT_REVIEW` | Ready for final decision | Management |
-| `COMPLETED_BID` | Approved (GO) | - |
-| `COMPLETED_NO_BID` | Rejected (NO-GO) | - |
-
----
-
-## 🎨 Features
-
-### ✅ Self-Healing Architecture
-- **Database**: Auto-adds missing columns on startup
-- **Oracle Sync**: UPSERT logic prevents duplicates
-- **Error Recovery**: Graceful handling of failures
-
-### ✅ Role-Based Workflow
-- **Management**: Assign to practice, final GO/NO-GO
-- **Practice Head**: Assign to SA, Accept/Reject scores
-- **Solution Architect**: Score opportunities, submit for review
-
-### ✅ Professional Git Hygiene
-- Clean `.gitignore` (no secrets, no temp files)
-- Only source code goes to GitHub
-- Safe to run `git add .` anytime
-
-### ✅ No Magic Strings
-- All statuses defined in `backend/constants.py`
-- Shared between frontend and backend
-- Type-safe, autocomplete-friendly
-
----
-
-## 🧪 Test Data
-
-After running `python scripts/db_manager.py populate`, you'll have:
-
-| Opportunity | Status | Purpose |
-|-------------|--------|---------|
-| Enterprise Cloud Platform | NEW_FROM_CRM | Test Management assignment |
-| Security Assessment | ASSIGNED_TO_PRACTICE | Test PH → SA assignment |
-| Data Analytics Platform | ASSIGNED_TO_SA | Test SA scoring |
-| **Deal Z - Cloud Migration** | **WAITING_PH_APPROVAL** | **Test PH Accept/Reject** ⭐ |
-| **ERP Implementation** | **WAITING_PH_APPROVAL** | **Test PH Accept/Reject** ⭐ |
-| **Cybersecurity Transformation** | **READY_FOR_MGMT_REVIEW** | **Test Mgmt GO/NO-GO** ⭐ |
-| **Digital Transformation** | **READY_FOR_MGMT_REVIEW** | **Test Mgmt GO/NO-GO** ⭐ |
-
----
-
-## 🐛 Troubleshooting
-
-### Backend won't start
-```bash
-# Check PostgreSQL is running
-# Default connection: postgres:Abcd1234@localhost:5432/bqs
-
-# Test connection
-python -c "import psycopg2; psycopg2.connect('dbname=bqs user=postgres password=Abcd1234')"
-```
-
-### Schema errors
-```bash
-# Auto-heal the schema
-python scripts/db_manager.py heal
-
-# Or just restart backend (auto-heals on startup)
-cd backend
-venv\Scripts\python main.py
-```
-
-### No data showing
-```bash
-# Populate test data
-python scripts/db_manager.py populate
-
-# Or sync from Oracle
-python scripts/sync_oracle_master.py
-```
-
-### Frontend won't connect
-- Ensure backend is running on http://localhost:8000
-- Check CORS settings in `backend/main.py`
-- Verify frontend is on http://localhost:5173
-
----
-
-## 📦 Deployment
-
-### Environment Variables
-
-Create `.env` file in `backend/`:
-
-```bash
-DATABASE_URL=postgresql://user:password@host:port/dbname
-ORACLE_BASE_URL=https://your-oracle-instance.com
-ORACLE_USERNAME=your_username
-ORACLE_PASSWORD=your_password
-```
-
-### Production Checklist
-
-- [ ] Set environment variables
-- [ ] Update CORS origins in `backend/main.py`
-- [ ] Configure PostgreSQL for production
-- [ ] Set up Oracle CRM credentials
-- [ ] Schedule `sync_oracle_master.py` (cron/scheduler)
-- [ ] Build frontend: `npm run build`
-- [ ] Deploy backend with gunicorn/uvicorn
-
----
-
-## 🤝 Contributing
-
-1. Clone the repository
-2. Run `python scripts/setup_project.py --with-data`
-3. Make your changes
-4. Test thoroughly
-5. Commit and push (`.gitignore` keeps it clean!)
-
----
-
-## 📝 License
-
-Proprietary - Internal Use Only
-
----
-
-## 🆘 Support
-
-For issues or questions:
-1. Check the troubleshooting section above
-2. Review `scripts/README.md` for detailed script documentation
-3. Contact the development team
-
----
-
-**Built with ❤️ for efficient bid qualification**
+Contact the development team for issues or questions.

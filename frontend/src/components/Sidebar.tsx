@@ -1,197 +1,62 @@
-import React, { useState } from 'react';
+
+import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import {
-    Home, Inbox, UserCheck, BarChart3, FileCheck,
-    ChevronDown, ArrowLeft, Briefcase, Target, Award
-} from 'lucide-react';
+import { Home, Inbox, User, LogOut } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 
-interface SidebarItemProps {
-    label: string;
-    icon?: React.ElementType;
-    hasSubmenu?: boolean;
-    isActive?: boolean;
-    onClick?: () => void;
-    path?: string;
-}
-
-const SidebarItem: React.FC<SidebarItemProps> = ({ label, icon: Icon, hasSubmenu, isActive, onClick, path }) => {
-    return (
-        <div
-            onClick={onClick}
-            className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${isActive
-                ? 'bg-orange-50 text-orange-600 border-l-4 border-orange-500'
-                : 'text-gray-700 hover:bg-gray-50 border-l-4 border-transparent'
-                }`}
-        >
-            <div className="flex items-center gap-3">
-                {Icon && <Icon size={20} className={isActive ? 'text-orange-500' : 'text-gray-500'} />}
-                <span className={`text-sm font-medium ${isActive ? 'text-orange-900' : 'text-gray-700'}`}>
-                    {label}
-                </span>
-            </div>
-            {hasSubmenu && <ChevronDown size={16} className="text-gray-400" />}
-        </div>
-    );
-};
-
 export function Sidebar() {
-    const [isOpen, setIsOpen] = useState(true);
     const navigate = useNavigate();
     const location = useLocation();
-    const { currentUser, setRole } = useUser();
+    const { currentUser, availableUsers, switchUser } = useUser();
 
-    if (!isOpen) return null;
+    if (!currentUser) return null;
 
     const isPathActive = (path: string) => location.pathname === path;
-
-    // Role-based menu items
-    const getMenuItems = () => {
-        const commonItems = [
-            {
-                label: 'Dashboard',
-                icon: Home,
-                path: '/',
-                onClick: () => navigate('/')
-            }
-        ];
-
-        // MANAGEMENT (Top Level) - Views all opportunities, makes final decisions
-        if (currentUser.role === 'MANAGEMENT') {
-            return [
-                ...commonItems,
-                {
-                    label: 'Management Dashboard',
-                    icon: Award,
-                    path: '/management',
-                    onClick: () => navigate('/management'),
-                    description: 'View submitted assessments and make final decisions'
-                },
-                {
-                    label: 'Analytics',
-                    icon: BarChart3,
-                    path: '/analytics',
-                    hasSubmenu: true
-                }
-            ];
-        }
-
-        // PRACTICE HEAD - Assigns SAs AND Reviews Assessments (2 tabs in one page)
-        if (currentUser.role === 'PRACTICE_HEAD') {
-            return [
-                ...commonItems,
-                {
-                    label: 'Governance Dashboard',
-                    icon: Award,
-                    path: '/practice-head-review',
-                    onClick: () => navigate('/practice-head-review'),
-                    description: 'Assign opportunities to SAs & Review submitted assessments'
-                },
-                {
-                    label: 'Analytics',
-                    icon: BarChart3,
-                    path: '/analytics',
-                    hasSubmenu: true
-                }
-            ];
-        }
-
-        // SOLUTION ARCHITECT - Scores assigned opportunities
-        if (currentUser.role === 'SOLUTION_ARCHITECT') {
-            return [
-                ...commonItems,
-                {
-                    label: 'Assigned to Me',
-                    icon: UserCheck,
-                    path: '/assigned-to-me',
-                    onClick: () => navigate('/assigned-to-me'),
-                    description: 'My assigned opportunities to score'
-                }
-            ];
-        }
-
-        return commonItems;
-    };
-
-    const menuItems = getMenuItems();
+    const isLead = currentUser.roles.includes("SALES_LEAD");
+    const isSA = currentUser.roles.includes("SA");
 
     return (
-        <div className="w-80 h-screen bg-white border-r border-gray-200 flex flex-col shadow-sm flex-shrink-0 overflow-y-auto">
+        <div className="w-80 h-screen bg-white border-r border-gray-200 flex flex-col shadow-sm flex-shrink-0">
             {/* Header */}
-            <div className="px-4 py-4 flex items-center justify-between sticky top-0 bg-white z-10 border-b border-gray-100">
-                <button className="text-orange-500 hover:bg-orange-50 p-1 rounded">
-                    <ArrowLeft size={20} />
-                </button>
-                <div className="text-xs font-medium text-gray-600">
-                    {currentUser.role === 'MANAGEMENT' && 'Management View'}
-                    {currentUser.role === 'PRACTICE_HEAD' && 'Practice Head View'}
-                    {currentUser.role === 'SOLUTION_ARCHITECT' && 'SA View'}
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-2">
+                <div className="bg-blue-600 text-white p-1 rounded font-bold text-sm">BQS</div>
+                <span className="font-semibold text-gray-800">Bid Scale</span>
+            </div>
+
+            {/* Main Nav */}
+            <div className="flex-1 py-4 space-y-1">
+                <div onClick={() => navigate('/')} className={`flex items-center gap-3 px-6 py-3 cursor-pointer ${isPathActive('/') ? 'bg-blue-50 text-blue-700 border-r-4 border-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}>
+                    <Inbox size={20} />
+                    <span className="font-medium">Opportunity Inbox</span>
+                </div>
+                {/* Add more links later */}
+            </div>
+
+            {/* Demo User Switcher */}
+            <div className="border-t p-4 bg-gray-50">
+                <div className="text-xs text-gray-500 font-bold uppercase mb-2">Simulate User (MVP)</div>
+                <div className="space-y-2">
+                    {availableUsers.map(u => (
+                        <button
+                            key={u.user_id}
+                            onClick={() => switchUser(u.user_id)}
+                            className={`w-full text-left px-3 py-2 text-sm rounded border ${currentUser.user_id === u.user_id ? 'bg-white border-blue-500 shadow-sm ring-1 ring-blue-500' : 'bg-gray-100 border-transparent hover:bg-white hover:border-gray-200'}`}
+                        >
+                            <div className="font-medium text-gray-900">{u.display_name}</div>
+                            <div className="text-xs text-gray-500">{u.roles.join(", ")}</div>
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            {/* User Info */}
-            <div className="px-4 py-3 bg-blue-50 border-b border-blue-100">
-                <div className="text-sm font-semibold text-blue-900">{currentUser.name}</div>
-                <div className="text-xs text-blue-600">{currentUser.email}</div>
-                <div className="text-xs text-blue-500 mt-1 capitalize">
-                    Role: {currentUser.role.replace('_', ' ')}
+            {/* Current User Profile */}
+            <div className="p-4 border-t flex items-center gap-3">
+                <div className="bg-gray-200 rounded-full p-2">
+                    <User size={20} className="text-gray-600" />
                 </div>
-            </div>
-
-            {/* Menu Items */}
-            <div className="flex-1 py-2">
-                <div className="px-4 py-2">
-                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                        Navigation
-                    </span>
-                </div>
-                {menuItems.map((item, index) => (
-                    <SidebarItem
-                        key={index}
-                        label={item.label}
-                        icon={item.icon}
-                        hasSubmenu={item.hasSubmenu}
-                        isActive={item.path ? isPathActive(item.path) : false}
-                        onClick={item.onClick}
-                        path={item.path}
-                    />
-                ))}
-            </div>
-
-            {/* Footer - Role Switcher (for demo) */}
-            <div className="border-t border-gray-200 p-4 bg-gray-50">
-                <div className="text-xs text-gray-500 mb-2 font-medium">Demo Role Switcher</div>
-                <div className="flex gap-2">
-                    <button
-                        onClick={() => {
-                            setRole('MANAGEMENT');
-                            navigate('/');
-                        }}
-                        className={`flex-1 text-xs px-2 py-1.5 border rounded transition-colors ${currentUser.role === 'MANAGEMENT' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-                        title="Management View"
-                    >
-                        Mgmt
-                    </button>
-                    <button
-                        onClick={() => {
-                            setRole('PRACTICE_HEAD');
-                            navigate('/');
-                        }}
-                        className={`flex-1 text-xs px-2 py-1.5 border rounded transition-colors ${currentUser.role === 'PRACTICE_HEAD' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-                        title="Practice Head View"
-                    >
-                        Practice
-                    </button>
-                    <button
-                        onClick={() => {
-                            setRole('SOLUTION_ARCHITECT');
-                            navigate('/');
-                        }}
-                        className={`flex-1 text-xs px-2 py-1.5 border rounded transition-colors ${currentUser.role === 'SOLUTION_ARCHITECT' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-                        title="Solution Architect View"
-                    >
-                        SA
-                    </button>
+                <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900 truncate">{currentUser.display_name}</div>
+                    <div className="text-xs text-gray-500 truncate">{currentUser.email}</div>
                 </div>
             </div>
         </div>
