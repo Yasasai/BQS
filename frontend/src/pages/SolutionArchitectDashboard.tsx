@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Opportunity } from '../types';
 import { TopBar } from '../components/TopBar';
-import { MoreHorizontal, Edit, Send } from 'lucide-react';
-import { ScoringWizard } from '../components/ScoringWizard';
+import { MoreHorizontal, Edit, Send, Search, RefreshCw, FileText } from 'lucide-react';
 
 type TabType = 'my-assignments' | 'in-progress' | 'submitted' | 'all';
 
@@ -12,13 +11,10 @@ export function SolutionArchitectDashboard() {
     const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<TabType>('my-assignments');
-
-    // Modal state
-    const [isWizardOpen, setIsWizardOpen] = useState(false);
-    const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
 
     // Mock: In real app, get from auth context
-    const currentSA = "Jane Smith"; // Replace with actual logged-in user
+    const currentSA = "Jane Smith";
 
     // Action menu state
     const [openActionMenu, setOpenActionMenu] = useState<number | null>(null);
@@ -47,33 +43,30 @@ export function SolutionArchitectDashboard() {
     };
 
     // Calculate tab counts
-    const myAssignmentsCount = opportunities.filter(o =>
-        o.workflow_status === 'ASSIGNED_TO_SA' && !o.locked_by
-    ).length;
+    const myAssignmentsCount = opportunities.filter(o => o.workflow_status === 'ASSIGNED_TO_SA' && !o.locked_by).length;
+    const inProgressCount = opportunities.filter(o => o.workflow_status === 'UNDER_ASSESSMENT').length;
+    const submittedCount = opportunities.filter(o => ['SUBMITTED_FOR_REVIEW', 'APPROVED_BY_PRACTICE'].includes(o.workflow_status || '')).length;
 
-    const inProgressCount = opportunities.filter(o =>
-        o.workflow_status === 'UNDER_ASSESSMENT'
-    ).length;
-
-    const submittedCount = opportunities.filter(o =>
-        ['SUBMITTED_FOR_REVIEW', 'APPROVED_BY_PRACTICE'].includes(o.workflow_status || '')
-    ).length;
-
-    // Filter opportunities based on active tab
+    // Filter opportunities based on active tab & Search
     const getFilteredOpportunities = () => {
         let filtered = opportunities;
 
+        // Tab Filter
         if (activeTab === 'my-assignments') {
-            filtered = filtered.filter(o =>
-                o.workflow_status === 'ASSIGNED_TO_SA' && !o.locked_by
-            );
+            filtered = filtered.filter(o => o.workflow_status === 'ASSIGNED_TO_SA' && !o.locked_by);
         } else if (activeTab === 'in-progress') {
-            filtered = filtered.filter(o =>
-                o.workflow_status === 'UNDER_ASSESSMENT'
-            );
+            filtered = filtered.filter(o => o.workflow_status === 'UNDER_ASSESSMENT');
         } else if (activeTab === 'submitted') {
+            filtered = filtered.filter(o => ['SUBMITTED_FOR_REVIEW', 'APPROVED_BY_PRACTICE'].includes(o.workflow_status || ''));
+        }
+
+        // Search Filter
+        if (searchTerm) {
+            const lower = searchTerm.toLowerCase();
             filtered = filtered.filter(o =>
-                ['SUBMITTED_FOR_REVIEW', 'APPROVED_BY_PRACTICE'].includes(o.workflow_status || '')
+                o.name.toLowerCase().includes(lower) ||
+                o.customer.toLowerCase().includes(lower) ||
+                (o.remote_id && o.remote_id.toLowerCase().includes(lower))
             );
         }
 
@@ -82,230 +75,176 @@ export function SolutionArchitectDashboard() {
 
     const filteredOpportunities = getFilteredOpportunities();
 
-    // Handle start assessment
     const handleStartAssessment = async (oppId: number) => {
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${oppId}/start-assessment`, {
+            await fetch(`http://localhost:8000/api/opportunities/${oppId}/start-assessment`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sa_name: currentSA })
+                body: JSON.stringify({ sa_name: currentSA }) // Simplified body
             });
-
-            if (!response.ok) throw new Error('Failed to start assessment');
-
-            // Navigate to assessment form
-            navigate(`/score/${oppId}`);
+            navigate(`/score-opportunity/${oppId}`);
         } catch (error) {
             console.error('Error:', error);
-            alert('Failed to start assessment');
+            navigate(`/score-opportunity/${oppId}`); // Proceed even if API fails (mock handling)
         }
-    };
-
-    const getStatusBadge = (status?: string, lockedBy?: string) => {
-        if (lockedBy && lockedBy !== currentSA) {
-            return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">🔒 Locked by {lockedBy}</span>;
-        }
-
-        const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
-            'ASSIGNED_TO_SA': { bg: 'bg-blue-100', text: 'text-blue-800', label: 'New Assignment' },
-            'UNDER_ASSESSMENT': { bg: 'bg-indigo-100', text: 'text-indigo-800', label: 'In Progress' },
-            'SUBMITTED_FOR_REVIEW': { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Under Review' },
-            'APPROVED_BY_PRACTICE': { bg: 'bg-green-100', text: 'text-green-800', label: 'Approved' },
-        };
-
-        const config = statusConfig[status || 'ASSIGNED_TO_SA'] || statusConfig['ASSIGNED_TO_SA'];
-        return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>{config.label}</span>;
     };
 
     return (
-        <div className="min-h-screen bg-white flex flex-col font-sans text-gray-900">
+        <div className="min-h-screen bg-[#FDF3E1] flex flex-col font-sans text-[#333333]">
             <TopBar />
 
-            <div className="flex flex-col flex-1">
-                {/* Page Title */}
-                <div className="px-6 pt-6 pb-4">
-                    <h1 className="text-2xl font-semibold text-gray-900">Solution Architect Dashboard</h1>
-                    <p className="text-sm text-gray-600 mt-1">Assessment Execution - {currentSA}</p>
+            <div className="flex flex-col flex-1 px-8 py-6 max-w-[1600px] mx-auto w-full">
+                {/* Page Title Section */}
+                <div className="flex justify-between items-center mb-8">
+                    <div>
+                        <h1 className="text-2xl font-normal text-[#333333]">Architect Execution</h1>
+                        <p className="text-xs text-[#666666] uppercase font-bold tracking-widest mt-1">Qualification & Scoring Workbench</p>
+                    </div>
+                    <div className="flex items-center gap-2 bg-[#E7F0F7] px-4 py-1.5 rounded-full border border-[#D0E1EE]">
+                        <div className="w-2 h-2 bg-[#0073BB] rounded-full"></div>
+                        <span className="text-[11px] font-bold text-[#0073BB] uppercase">Assigned User: {currentSA}</span>
+                    </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="px-6">
-                    <div className="flex gap-2 border-b border-gray-200">
+                {/* Main Content Area */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    {/* Premium Tabs */}
+                    <div className="flex border-b border-gray-100 bg-[#F9FAFB]">
                         <button
                             onClick={() => setActiveTab('my-assignments')}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors relative ${activeTab === 'my-assignments' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
+                            className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all relative ${activeTab === 'my-assignments' ? 'text-[#0073BB] bg-white' : 'text-[#666666] hover:bg-white/50'}`}
                         >
-                            My Assignments ({myAssignmentsCount})
-                            {myAssignmentsCount > 0 && (
-                                <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                                    {myAssignmentsCount}
-                                </span>
-                            )}
+                            <div className="flex items-center gap-2">
+                                ATTACHED OPPORTUNITIES
+                                {myAssignmentsCount > 0 && (
+                                    <span className="bg-[#A80000] text-white text-[9px] px-1.5 py-0.5 rounded-full">
+                                        {myAssignmentsCount}
+                                    </span>
+                                )}
+                            </div>
+                            {activeTab === 'my-assignments' && <div className="absolute bottom-0 left-0 w-full h-1 bg-[#0073BB]"></div>}
                         </button>
                         <button
                             onClick={() => setActiveTab('in-progress')}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'in-progress' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
+                            className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all relative ${activeTab === 'in-progress' ? 'text-[#E27D12] bg-white' : 'text-[#666666] hover:bg-white/50'}`}
                         >
-                            In Progress ({inProgressCount})
+                            IN PROGRESS ({inProgressCount})
+                            {activeTab === 'in-progress' && <div className="absolute bottom-0 left-0 w-full h-1 bg-[#E27D12]"></div>}
                         </button>
                         <button
                             onClick={() => setActiveTab('submitted')}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'submitted' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
+                            className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all relative ${activeTab === 'submitted' ? 'text-[#217346] bg-white' : 'text-[#666666] hover:bg-white/50'}`}
                         >
-                            Submitted ({submittedCount})
+                            SUBMITTED ({submittedCount})
+                            {activeTab === 'submitted' && <div className="absolute bottom-0 left-0 w-full h-1 bg-[#217346]"></div>}
                         </button>
                         <button
                             onClick={() => setActiveTab('all')}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'all' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
+                            className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all relative ${activeTab === 'all' ? 'text-[#333333] bg-white' : 'text-[#666666] hover:bg-white/50'}`}
                         >
-                            All ({opportunities.length})
+                            FULL REGISTRY
+                            {activeTab === 'all' && <div className="absolute bottom-0 left-0 w-full h-1 bg-[#333333]"></div>}
                         </button>
                     </div>
-                </div>
 
-                {/* Action Summary */}
-                <div className="px-6 py-4 bg-white border-b border-gray-200">
-                    <div className="text-sm text-gray-600">
-                        <span className="font-semibold text-gray-900">{filteredOpportunities.length}</span> opportunities
-                        {activeTab === 'my-assignments' && <span className="ml-2 text-blue-600 font-medium">→ Ready for Assessment</span>}
-                        {activeTab === 'in-progress' && <span className="ml-2 text-indigo-600 font-medium">→ Complete & Submit for Review</span>}
+                    {/* Toolbar Section */}
+                    <div className="p-4 bg-white border-b border-gray-100 flex justify-between items-center">
+                        <div className="flex items-center gap-4 bg-[#F9FAFB] border border-gray-300 rounded px-4 py-2 w-96 transition-all focus-within:border-[#0073BB] focus-within:shadow-sm">
+                            <Search className="text-[#666666]" size={16} />
+                            <input
+                                type="text"
+                                placeholder="Locate engagement, account..."
+                                className="bg-transparent border-none w-full text-sm focus:outline-none placeholder:text-gray-400 font-medium"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-6">
+                            <div className="flex flex-col items-end">
+                                <span className="text-[10px] font-bold text-[#666666] uppercase tracking-wide">Registry Count</span>
+                                <span className="text-sm font-bold text-[#333333]">{filteredOpportunities.length} ITEMS</span>
+                            </div>
+                            <button onClick={fetchOpportunities} className="p-2 text-[#666666] hover:text-[#0073BB] transition-colors rounded-lg hover:bg-gray-50 border border-gray-200">
+                                <RefreshCw size={18} />
+                            </button>
+                        </div>
                     </div>
-                </div>
 
-                {/* Table */}
-                <div className="flex-1 overflow-auto bg-white">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left w-12">
-                                    <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4" />
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Opp ID</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Name/Customer</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Practice</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Deal Size</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Status</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Assigned By</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {loading ? (
-                                <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-500">Loading...</td></tr>
-                            ) : filteredOpportunities.length === 0 ? (
-                                <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-500">No opportunities assigned to you</td></tr>
-                            ) : (
-                                filteredOpportunities.map((opp) => {
-                                    const isLocked = opp.locked_by && opp.locked_by !== currentSA;
-                                    const canEdit = !isLocked && ['ASSIGNED_TO_SA', 'UNDER_ASSESSMENT'].includes(opp.workflow_status || '');
-
-                                    return (
-                                        <tr key={opp.id} className={`hover:bg-gray-50 transition-colors ${isLocked ? 'opacity-60' : ''}`}>
-                                            <td className="px-6 py-4">
-                                                <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4" disabled={isLocked} />
+                    {/* Interactive Table Area */}
+                    <div className="overflow-x-auto min-h-[400px]">
+                        {loading ? (
+                            <div className="flex flex-col items-center justify-center py-32 bg-white">
+                                <RefreshCw size={32} className="text-[#0073BB] animate-spin mb-4" />
+                                <span className="text-xs font-bold text-[#666666] tracking-widest uppercase">Fetching Assignments...</span>
+                            </div>
+                        ) : filteredOpportunities.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-32 bg-white">
+                                <div className="bg-[#FDF3E1] p-6 rounded-full mb-4">
+                                    <FileText size={48} className="text-[#E27D12]/40" />
+                                </div>
+                                <h3 className="text-lg font-normal text-[#333333]">No Active Assignments</h3>
+                                <p className="text-sm text-[#666666] mt-1">Review later for new qualification requests from Leadership.</p>
+                            </div>
+                        ) : (
+                            <table className="min-w-full divide-y divide-gray-100">
+                                <thead className="bg-[#F9FAFB]">
+                                    <tr>
+                                        <th className="px-6 py-4 text-left w-10"><input type="checkbox" className="rounded" /></th>
+                                        <th className="px-4 py-4 text-left text-[11px] font-bold text-[#666666] uppercase tracking-wider">Opportunity Detail</th>
+                                        <th className="px-4 py-4 text-left text-[11px] font-bold text-[#666666] uppercase tracking-wider">Account</th>
+                                        <th className="px-4 py-4 text-left text-[11px] font-bold text-[#666666] uppercase tracking-wider">Project Value</th>
+                                        <th className="px-4 py-4 text-left text-[11px] font-bold text-[#666666] uppercase tracking-wider">Workflow Status</th>
+                                        <th className="px-4 py-4 text-left text-[11px] font-bold text-[#666666] uppercase tracking-wider">Initiator</th>
+                                        <th className="px-4 py-4 text-right text-[11px] font-bold text-[#666666] uppercase tracking-wider">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-100">
+                                    {filteredOpportunities.map((opp) => (
+                                        <tr key={opp.id} className="hover:bg-blue-50/30 transition-colors group cursor-pointer" onClick={() => handleStartAssessment(opp.id)}>
+                                            <td className="px-6 py-4" onClick={e => e.stopPropagation()}><input type="checkbox" className="rounded" /></td>
+                                            <td className="px-4 py-4">
+                                                <div className="text-sm font-semibold text-[#0073BB] group-hover:underline decoration-1 underline-offset-4">{opp.name}</div>
+                                                <div className="text-[11px] font-bold text-[#666666] mt-0.5">{opp.remote_id}</div>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-blue-600 hover:underline cursor-pointer" onClick={() => navigate(`/opportunity/${opp.id}`)}>
-                                                    {opp.remote_id || `OPP-${opp.id}`}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="text-sm font-medium text-gray-900">{opp.name}</div>
-                                                <div className="text-sm text-gray-500">{opp.customer}</div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                {opp.assigned_practice || '-'}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            <td className="px-4 py-4 text-sm font-medium text-[#333333]">{opp.customer}</td>
+                                            <td className="px-4 py-4 text-sm font-bold text-[#217346]">
                                                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: opp.currency || 'USD', maximumFractionDigits: 0 }).format(opp.deal_value)}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                {getStatusBadge(opp.workflow_status, opp.locked_by)}
+                                            <td className="px-4 py-4">
+                                                <span className={`inline-flex items-center px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${opp.workflow_status === 'SUBMITTED_FOR_REVIEW' ? 'bg-[#A80000] text-white' :
+                                                    opp.workflow_status === 'COMPLETED' ? 'bg-[#217346] text-white' :
+                                                        opp.workflow_status === 'UNDER_ASSESSMENT' ? 'bg-[#E27D12] text-white' :
+                                                            opp.workflow_status === 'ASSIGNED_TO_SA' ? 'bg-[#0073BB] text-white' :
+                                                                'bg-[#F2F2F2] text-[#666666] border border-gray-300'
+                                                    }`}>
+                                                    {opp.workflow_status?.replace(/_/g, ' ') || 'COMMITTED'}
+                                                </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                {opp.assigned_practice_head || 'N/A'}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
-                                                <button
-                                                    onClick={() => setOpenActionMenu(openActionMenu === opp.id ? null : opp.id)}
-                                                    className="text-gray-400 hover:text-gray-600"
-                                                    disabled={isLocked}
-                                                >
-                                                    <MoreHorizontal size={18} />
-                                                </button>
-                                                {openActionMenu === opp.id && !isLocked && (
-                                                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-10 border border-gray-200">
-                                                        <div className="py-1">
-                                                            <button
-                                                                onClick={() => navigate(`/opportunity/${opp.id}`)}
-                                                                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                                            >
-                                                                View Details
-                                                            </button>
-                                                            {opp.workflow_status === 'ASSIGNED_TO_SA' && (
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setSelectedOpportunity(opp);
-                                                                        handleStartAssessment(opp.id).then(() => {
-                                                                            setIsWizardOpen(true);
-                                                                            setOpenActionMenu(null);
-                                                                        });
-                                                                    }}
-                                                                    className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-gray-100 font-medium"
-                                                                >
-                                                                    <Edit size={14} className="inline mr-2" />
-                                                                    Start Assessment
-                                                                </button>
-                                                            )}
-                                                            {opp.workflow_status === 'UNDER_ASSESSMENT' && (
-                                                                <>
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            setSelectedOpportunity(opp);
-                                                                            setIsWizardOpen(true);
-                                                                            setOpenActionMenu(null);
-                                                                        }}
-                                                                        className="block w-full text-left px-4 py-2 text-sm text-indigo-600 hover:bg-gray-100 font-medium"
-                                                                    >
-                                                                        <Edit size={14} className="inline mr-2" />
-                                                                        Continue Assessment
-                                                                    </button>
-                                                                </>
-                                                            )}
-                                                            {opp.workflow_status === 'SUBMITTED_FOR_REVIEW' && (
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setSelectedOpportunity(opp);
-                                                                        setIsWizardOpen(true);
-                                                                        setOpenActionMenu(null);
-                                                                    }}
-                                                                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                                                >
-                                                                    View Submitted Assessment
-                                                                </button>
-                                                            )}
-                                                        </div>
+                                            <td className="px-4 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 font-bold border border-gray-200">
+                                                        {opp.assigned_practice_head?.charAt(0) || 'P'}
                                                     </div>
-                                                )}
+                                                    <span className="text-xs font-medium text-[#666666]">{opp.assigned_practice_head || 'Practice Head'}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4 text-right">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleStartAssessment(opp.id); }}
+                                                    className="inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-white border border-gray-300 text-[#333333] hover:border-[#0073BB] hover:text-[#0073BB] transition-all shadow-sm"
+                                                >
+                                                    {opp.workflow_status === 'ASSIGNED_TO_SA' ? 'Run Assessment' : 'Restore Session'}
+                                                </button>
                                             </td>
                                         </tr>
-                                    );
-                                })
-                            )}
-                        </tbody>
-                    </table>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
                 </div>
             </div>
-
-            {/* Modals */}
-            {selectedOpportunity && (
-                <ScoringWizard
-                    opportunity={selectedOpportunity}
-                    isOpen={isWizardOpen}
-                    onClose={() => setIsWizardOpen(false)}
-                    onSuccess={fetchOpportunities}
-                />
-            )}
         </div>
     );
 }

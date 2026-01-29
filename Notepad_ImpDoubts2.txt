@@ -1,0 +1,22 @@
+python complete_oracle_sync.py sync -> for Open Opportunities saved
+python test_exact_url.py -> 
+batch_with_offset.py
+ArchitectureFlow.md(19Jan)
+Sync Manager
+
+URLs:
+https://eijs-test.fa.em2.oraclecloud.com/crmRestApi/resources/11.12.1.0/opportunities?q=StatusCode='OPEN' - For Oracle Opportunities which are currently open -- 953 records
+https://eijs-test.fa.em2.oraclecloud.com/crmRestApi/resources/11.12.1.0/opportunities?finder=MyOpportunitiesFinder;RecordSet=ALLOPTIES - For Oracle Opportunities -- 113 records
+https://eijs-test.fa.em2.oraclecloud.com/crmRestApi/resources/11.12.1.0/opportunities?finder=MyOpportunitiesFinder;RecordSet='ALLOPTIES'&limit=50&offset=0 - For Oracle Opportunities where I am sales admin or etc -- 12702 records
+https://eijs-test.fa.em2.oraclecloud.com/crmRestApi/resources/latest/opportunities/1602737 -- For One Opportunity
+
+
+
+If any changes happen in the opportunity, it has to be somewhere stored in a log - so check my db and do things accordingly.
+
+https://eijs-test.fa.em2.oraclecloud.com/crmRestApi/resources/11.12.1.0/opportunities?q=StatusCode='OPEN'&totalResults=true&limit=500 - 96620 lines
+https://eijs-test.fa.em2.oraclecloud.com/crmRestApi/resources/11.12.1.0/opportunities?q=StatusCode='OPEN'&totalResults=true&limit=1 - 954 records - Working and Retrieved data into Opportunities Table
+
+Get all opportunities - Kunal
+Put these opportunities - Kunal to SAs
+

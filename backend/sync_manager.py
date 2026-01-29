@@ -22,9 +22,13 @@ def log(msg):
     logging.info(msg)
 
 try:
-    from backend.database import SessionLocal, Opportunity, init_db, Practice
+    from backend.app.core.database import SessionLocal, init_db
+    from backend.app.models import Opportunity, Practice
 except ImportError:
-    from database import SessionLocal, Opportunity, init_db, Practice
+    # Fallback/Direct run support
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from backend.app.core.database import SessionLocal, init_db
+    from backend.app.models import Opportunity, Practice
 
 def map_oracle_to_db(item, db: Session):
     """Map Oracle JSON to our Opportunity model"""

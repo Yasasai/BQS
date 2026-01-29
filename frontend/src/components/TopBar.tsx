@@ -6,11 +6,20 @@ export function TopBar() {
     const navigate = useNavigate();
 
     return (
-        <header className="bg-white border-b border-gray-200 h-12 flex items-center justify-between px-4 sticky top-0 z-50">
+        <header className="bg-[#FDF3E1] border-b border-gray-200 h-14 flex items-center justify-between px-6 sticky top-0 z-50">
             <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                    <Menu size={20} className="text-gray-500 cursor-pointer" />
-                    <span className="text-[#003366] text-xl font-serif italic tracking-tighter">inspira</span>
+                <div className="flex items-center gap-4">
+                    <Menu size={20} className="text-gray-600 cursor-pointer" />
+                    <div className="flex items-center gap-3">
+                        <span className="text-[#5B5B5B] text-2xl font-normal tracking-tight" style={{ fontFamily: '"Libre Baskerville", serif' }}>inspira</span>
+                        <div className="h-10 w-10 bg-[#C62828] flex flex-col items-center justify-center p-1 leading-none text-[6px] font-bold text-white text-center rounded-sm">
+                            <div className="text-[4px]">Great</div>
+                            <div className="text-[4px]">Place</div>
+                            <div className="text-[4px]">To</div>
+                            <div className="text-[4px]">Work</div>
+                            <div className="text-[3px] opacity-70 mt-0.5">Certified</div>
+                        </div>
+                    </div>
                 </div>
 
                 <nav className="flex items-center gap-4 ml-6">
@@ -31,15 +40,19 @@ export function TopBar() {
                 </nav>
             </div>
 
-            <div className="flex items-center gap-4">
-                <Home size={18} className="text-gray-500 cursor-pointer hover:text-blue-600" onClick={() => navigate('/')} />
+            <div className="flex items-center gap-6 pr-4">
+                <Search size={22} className="text-[#5B5B5B] cursor-pointer hover:text-blue-600" />
                 <div className="relative">
-                    <Bell size={18} className="text-gray-500 cursor-pointer" />
-                    <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[9px] rounded-full h-3 w-3 flex items-center justify-center font-bold">3</span>
+                    <Bell size={22} className="text-[#5B5B5B] cursor-pointer" />
+                    <span className="absolute -top-1.5 -right-1.5 bg-[#C62828] text-white text-[9px] rounded-full h-4 w-4 flex items-center justify-center font-bold border-2 border-[#FDF3E1]">1</span>
                 </div>
-                <div className="flex items-center justify-center w-7 h-7 bg-orange-100 rounded-full text-orange-700 text-[10px] font-bold border border-orange-200">
-                    YU
+                <div className="text-[#5B5B5B] cursor-pointer hover:text-blue-600">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
                 </div>
+                <div className="text-[#5B5B5B] cursor-pointer hover:text-blue-600">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                </div>
+                <User size={28} className="text-[#5B5B5B] cursor-pointer" />
             </div>
         </header>
     );

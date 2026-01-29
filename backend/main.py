@@ -9,19 +9,17 @@ import sys
 # FIX: Add project root
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.database import init_db
+from backend.app.core.database import init_db
 from backend.sync_manager import sync_opportunities
-from backend.routers import auth, inbox, scoring
+from backend.app.routers import auth, inbox, scoring, upload
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("🚀 BQS Starting...")
     init_db()
-    # Auto-Sync on Startup (Lightweight)
-    try:
-        sync_opportunities()
-    except Exception as e:
-        print(f"Startup Sync Error: {e}")
+    # Run sync in background on start using a thread
+    import threading
+    threading.Thread(target=sync_opportunities, daemon=True).start()
     yield
 
 app = FastAPI(title="BQS MVP", lifespan=lifespan)
@@ -37,6 +35,10 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(inbox.router)
 app.include_router(scoring.router)
+app.include_router(upload.router)
+from backend.app.routers import opportunities, batch_sync
+app.include_router(opportunities.router)
+app.include_router(batch_sync.router)
 
 @app.post("/api/sync-force")
 def force_sync(background_tasks: BackgroundTasks):
