@@ -111,6 +111,7 @@ class OppScoreVersion(Base):
     created_by_user_id = Column(String, ForeignKey("app_user.user_id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     submitted_at = Column(DateTime, nullable=True)
+    attachment_name = Column(String, nullable=True) # Added for evidence upload
 
     opportunity = relationship("Opportunity", back_populates="score_versions")
     section_values = relationship("OppScoreSectionValue", back_populates="score_version")
@@ -128,8 +129,9 @@ class OppScoreSectionValue(Base):
     score_version_id = Column(String, ForeignKey("opp_score_version.score_version_id"), nullable=False)
     section_code = Column(String, ForeignKey("opp_score_section.section_code"), nullable=False)
     
-    score = Column(Integer, nullable=False) # 1..5
+    score = Column(Float, nullable=False) # Changed from Integer to Float for 0.5 steps
     notes = Column(Text, nullable=True)
+    selected_reasons = Column(JSON, nullable=True) # Added for chips
 
     score_version = relationship("OppScoreVersion", back_populates="section_values")
 
