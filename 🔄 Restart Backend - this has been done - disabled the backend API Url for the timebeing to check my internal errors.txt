@@ -1,0 +1,32 @@
+🔄 Restart Backend:
+Stop the current backend (in the terminal where it's running):
+
+Press Ctrl + C
+Start it again:
+
+cd backend
+python -m uvicorn app.main:app --reload
+Watch for this message:
+🚀 BQS Starting...
+✅ BQS Ready!
+INFO:     Uvicorn running on http://127.0.0.1:8000
+It should start much faster now (within 2-3 seconds).
+
+Test the docs page again:
+http://127.0.0.1:8000/docs
+It should open instantly now.
+
+Test the API:
+http://127.0.0.1:8000/api/opportunities
+Should return JSON data immediately.
+
+📝 What I Did:
+I disabled the Oracle CRM sync on startup because it was:
+
+Taking too long (probably trying to fetch from Oracle)
+Blocking the entire backend from starting
+Making every request timeout
+Your data is still in PostgreSQL - we just disabled the automatic sync. You can manually sync later if needed using:
+
+POST http://127.0.0.1:8000/api/sync-force
+Try restarting the backend now and let me know if it starts faster!

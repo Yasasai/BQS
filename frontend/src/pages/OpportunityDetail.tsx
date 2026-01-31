@@ -13,15 +13,18 @@ export function OpportunityDetail() {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<TabType>('overview');
 
+    const [history, setHistory] = useState<any[]>([]);
+
     useEffect(() => {
         if (id) {
             fetchOpportunityDetail(id);
+            fetchHistory(id);
         }
     }, [id]);
 
     const fetchOpportunityDetail = (oppId: string) => {
         setLoading(true);
-        fetch(`http://localhost:8000/api/oracle-opportunity/${oppId}`)
+        fetch(`http://127.0.0.1:8000/api/inbox/${oppId}`)
             .then(res => res.json())
             .then(data => {
                 setOpportunity(data);
@@ -31,6 +34,42 @@ export function OpportunityDetail() {
                 console.error("Failed to fetch opportunity detail", err);
                 setLoading(false);
             });
+    };
+
+    const fetchHistory = (oppId: string) => {
+        fetch(`http://127.0.0.1:8000/api/scoring/${oppId}/history`)
+            .then(res => res.json())
+            .then(data => setHistory(data))
+            .catch(err => console.error("Failed to fetch history", err));
+    };
+
+    const handleApprove = async (oppId: string) => {
+        if (!window.confirm("Approve this assessment?")) return;
+        try {
+            await fetch(`http://127.0.0.1:8000/api/scoring/${oppId}/review/approve`, { method: 'POST' });
+            alert("Approved successfully");
+            fetchOpportunityDetail(oppId);
+        } catch (error) {
+            console.error(error);
+            alert("Failed to approve");
+        }
+    };
+
+    const handleReject = async (oppId: string) => {
+        const reason = window.prompt("Reason for rejection:");
+        if (reason === null) return;
+        try {
+            await fetch(`http://127.0.0.1:8000/api/scoring/${oppId}/review/reject`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason })
+            });
+            alert("Rejected successfully");
+            fetchOpportunityDetail(oppId);
+        } catch (error) {
+            console.error(error);
+            alert("Failed to reject");
+        }
     };
 
     if (loading) {
@@ -248,9 +287,26 @@ export function OpportunityDetail() {
                                             Win Probability (%)
                                         </label>
                                         <p className="text-[13px] text-gray-900 font-bold text-lg text-blue-700">
-                                            {opportunity.win_probability || '40'}
+                                            {opportunity.win_probability || '40'}%
                                         </p>
                                     </div>
+
+                                    {opportunity.workflow_status === 'SUBMITTED_FOR_REVIEW' && (
+                                        <div className="pt-4 flex gap-2">
+                                            <button
+                                                onClick={() => handleApprove(opportunity.id)}
+                                                className="bg-green-600 text-white px-4 py-2 rounded text-[11px] font-bold uppercase hover:bg-green-700 transition-colors shadow-sm"
+                                            >
+                                                Approve
+                                            </button>
+                                            <button
+                                                onClick={() => handleReject(opportunity.id)}
+                                                className="bg-red-600 text-white px-4 py-2 rounded text-[11px] font-bold uppercase hover:bg-red-700 transition-colors shadow-sm"
+                                            >
+                                                Reject
+                                            </button>
+                                        </div>
+                                    )}
 
                                     <div>
                                         <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
@@ -323,13 +379,34 @@ export function OpportunityDetail() {
 
                     {activeTab === 'versions' && (
                         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                            <div className="text-center py-12">
-                                <History size={48} className="mx-auto text-gray-400 mb-4" />
-                                <h3 className="text-lg font-medium text-gray-900 mb-2">Version History</h3>
-                                <p className="text-sm text-gray-600">
-                                    No previous versions available.
-                                </p>
-                            </div>
+                            {history.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <History size={48} className="mx-auto text-gray-400 mb-4" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">Version History</h3>
+                                    <p className="text-sm text-gray-600">No previous versions available.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {history.map((h, i) => (
+                                        <div key={i} className="p-4 border border-gray-100 rounded-lg bg-gray-50 flex justify-between items-center">
+                                            <div>
+                                                <div className="text-sm font-bold text-gray-900">Version {h.version}</div>
+                                                <div className="text-xs text-gray-500">{new Date(h.created_at).toLocaleString()}</div>
+                                                <div className="text-xs text-gray-700 mt-2 italic">"{h.summary}"</div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-xl font-bold text-blue-700">{h.score}%</div>
+                                                <button
+                                                    onClick={() => navigate(`/score/${id}`)}
+                                                    className="text-[10px] uppercase font-bold text-blue-600 hover:underline mt-1"
+                                                >
+                                                    View Details
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
 

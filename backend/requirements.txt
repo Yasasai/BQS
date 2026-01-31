@@ -7,5 +7,5 @@ asyncpg
 requests
 pydantic
 pyright
-
+httpx
 apscheduler
