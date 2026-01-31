@@ -11,8 +11,9 @@ router = APIRouter(prefix="/api/scoring", tags=["scoring"])
 
 class SectionInput(BaseModel):
     section_code: str
-    score: int
+    score: float
     notes: Optional[str] = ""
+    selected_reasons: Optional[List[str]] = []
 
 class ScoreInput(BaseModel):
     user_id: str
@@ -20,12 +21,18 @@ class ScoreInput(BaseModel):
     confidence_level: Optional[str] = None
     recommendation: Optional[str] = None
     summary_comment: Optional[str] = None
+    attachment_name: Optional[str] = None
 
 @router.get("/{opp_id}/latest")
 def get_latest_score(opp_id: str, db: Session = Depends(get_db)):
     latest = db.query(OppScoreVersion).filter(OppScoreVersion.opp_id == opp_id).order_by(desc(OppScoreVersion.version_no)).first()
     if not latest: return {"status": "NOT_STARTED", "sections": []}
     
+    # LOGIC FIX: If an assessment is marked "SUBMITTED" but has no section values, 
+    # it's likely a stale or dummy record. Treat it as NOT_STARTED to allow the user to fill it.
+    if latest.status == "SUBMITTED" and not latest.section_values:
+        return {"status": "NOT_STARTED", "sections": []}
+        
     # Simple serialization
     sections = []
     value_map = {v.section_code: v for v in latest.section_values}
@@ -37,16 +44,26 @@ def get_latest_score(opp_id: str, db: Session = Depends(get_db)):
         sections.append({
             "section_code": d.section_code,
             "section_name": d.section_name,
+            "weight": d.weight,
             "score": val.score if val else 0,
-            "notes": val.notes if val else ""
+            "notes": val.notes if val else "",
+            "selected_reasons": val.selected_reasons if val else []
         })
+    
+    # DYNAMIC STATUS CHECK:
+    # If all scores are 0, it means no rating has been given yet.
+    has_ratings = any(s["score"] > 0 for s in sections)
+    current_status = latest.status
+    if not has_ratings:
+        current_status = "NOT_STARTED"
         
     return {
-        "status": latest.status,
-        "overall_score": latest.overall_score,
+        "status": current_status,
+        "overall_score": latest.overall_score if has_ratings else 0,
         "confidence_level": latest.confidence_level,
         "recommendation": latest.recommendation,
         "summary_comment": latest.summary_comment,
+        "attachment_name": latest.attachment_name,
         "sections": sections
     }
 
@@ -63,14 +80,22 @@ def save_draft(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
     draft.confidence_level = data.confidence_level
     draft.recommendation = data.recommendation
     draft.summary_comment = data.summary_comment
+    draft.attachment_name = data.attachment_name
     
     for s in data.sections:
         val = db.query(OppScoreSectionValue).filter(OppScoreSectionValue.score_version_id == draft.score_version_id, OppScoreSectionValue.section_code == s.section_code).first()
         if val:
             val.score = s.score
             val.notes = s.notes
+            val.selected_reasons = s.selected_reasons
         else:
-            db.add(OppScoreSectionValue(score_version_id=draft.score_version_id, section_code=s.section_code, score=s.score, notes=s.notes))
+            db.add(OppScoreSectionValue(
+                score_version_id=draft.score_version_id, 
+                section_code=s.section_code, 
+                score=s.score, 
+                notes=s.notes,
+                selected_reasons=s.selected_reasons
+            ))
             
     db.commit()
     return {"status": "success"}

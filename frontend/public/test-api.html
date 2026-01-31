@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>BQS API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        button {
+            background: #0073BB;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background: #005a8f;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>🧪 BQS API Connection Test</h1>
+    <p>This page tests if your frontend can connect to the backend API.</p>
+    
+    <button onclick="testConnection()">Test API Connection</button>
+    
+    <div id="result"></div>
+
+    <script>
+        async function testConnection() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '⏳ Testing connection...';
+            resultDiv.className = '';
+            
+            try {
+                console.log('Fetching from: http://127.0.0.1:8000/api/opportunities');
+                
+                const response = await fetch('http://127.0.0.1:8000/api/opportunities');
+                
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                console.log('Data received:', data);
+                
+                resultDiv.className = 'success';
+                resultDiv.innerHTML = `✅ SUCCESS!\n\nStatus: ${response.status}\nOpportunities found: ${data.length}\n\nFirst opportunity:\n${JSON.stringify(data[0], null, 2)}`;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.className = 'error';
+                resultDiv.innerHTML = `❌ ERROR!\n\n${error.message}\n\nCheck browser console (F12) for details.`;
+            }
+        }
+        
+        // Auto-test on load
+        window.onload = () => {
+            console.log('Page loaded. Click the button to test API connection.');
+        };
+    </script>
+</body>
+</html>

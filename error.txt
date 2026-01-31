@@ -1,0 +1,322 @@
+  ✓ Saved: MRF Phising
+   ✓ Saved: Adani Demand and Inventory
+   ✓ Saved: AI
+   ✓ Saved: Humain KSA Saviynt
+   ✓ Saved: EDR Indo Mim
+   ✓ Saved: AI workflow automation Giza
+   ✓ Saved: Resource for Royal Enfield
+   ✓ Saved: Digital identity management
+   ✓ Saved: Redteaming
+   ✓ Saved: AI
+   ✓ Saved: LR
+   ✓ Saved: NTU Managed Services
+   ✓ Saved: Yum food Sentinel Implementation
+   ✓ Saved: Threat Protection Envisioning Workshop
+   ✓ Saved: Data Security Envisioning Workshop
+   ✓ Saved: SGX SIEM
+   ✓ Saved: 3 Resource ITOM ZS
+   ✓ Saved: Data Security Envisioning Workshop
+   ✓ Saved: Owkin AWS GRC Advisory
+   ✓ Saved: iSTARI Staff Augmentation 10 roles
+   ✓ Saved: Nueva Phinma MSOC
+   ✓ Saved: OCS DLP
+   ✓ Saved: Kotak Bank SOC
+   ✓ Saved: AR DSS SCA
+   ✓ Saved: GCash AI for Post Transaction Monitoring
+   ✓ Saved: Threat Protection Envisioning Workshop
+   ✓ Saved: Threat Protection Envisioning Workshop
+   ✓ Saved: PJLI MCI Workshop
+   ✓ Saved: Data Security Envisioning Workshop
+   ✓ Saved: Resource Req Cummins
+   ✓ Saved: L1 GRC resource
+   ✓ Saved: Imperva Managed service
+   ✓ Saved: Auxilo Finserve Limited DLP
+📡 Fetching: Offset 850, Limit 50
+2026-01-30 14:20:35,585 - 📡 Fetching: Offset 850, Limit 50
+2026-01-30 14:20:44,025 - HTTP Request: GET https://eijs-test.fa.em2.oraclecloud.com/crmRestApi/resources/11.12.1.0/opportunities?q=StatusCode%3D%27OPEN%27&offset=850&limit=50&totalResults=true "HTTP/1.1 200 OK"
+   Processing 50 items...
+2026-01-30 14:20:55,869 -    Processing 50 items...
+   ✓ Saved: MSSP Renewal for Bennett
+   ✓ Saved: Ashok Leyland Demand and Inventory
+   ✓ Saved: Abbot Demand and Inventory
+   ✓ Saved: IOT OT
+   ✓ Saved: Aboitiz 3410
+   ✓ Saved: Centurion MS XDR
+   ✓ Saved: Managed GRC Services
+   ✓ Saved: VAPT
+   ✓ Saved: Fortinet
+   ✓ Saved: CBI UPI Infra
+   ✓ Saved: AUB DevSecOps
+   ✓ Saved: Patchmanagement as a Service KBL
+   ✓ Saved: CEG SOC Licenses
+   ✓ Saved: Okta resource for KPMG
+   ✓ Saved: Zscaler
+   ✓ Saved: Centurion CA
+   ✓ Saved: Swan Energy Introductory
+   ✓ Saved: SGX Databahn
+   ✓ Saved: AUB Data Tokenization
+   ✓ Saved: FWD MSOC
+   ✓ Saved: threat intell
+   ✓ Saved: PruLife AI for Contact Centers
+   ✓ Saved: UT Global O365 Backup
+   ✓ Saved: AUB PAM
+   ✓ Saved: Bangko Kabayan WAF
+   ✓ Saved: Sentinel Automation BFL
+   ✓ Saved: Symphony Demand and Inventory
+   ✓ Saved: AI Demand and Inventory
+   ✓ Saved: Allianz PNB L1 Application Support
+   ✓ Saved: IAM Advisory
+   ✓ Saved: PAM Suzlon
+   ✓ Saved: PPT AI use Cases
+   ✓ Saved: Uno Demand and Inventory
+   ✓ Saved: Data Analytics
+   ✓ Saved: Allianz PNB Data Advisory Services
+   ✓ Saved: Akzo Data and AI
+   ✓ Saved: Business ops and Cybersecurity
+   ✓ Saved: CIMB Bank Philippines MCI Workshop
+   ✓ Saved: Windar AI for Demand and Inventory
+   ✓ Saved: SE Dell VXRAIL Support Renewal
+   ✓ Saved: Shearwater PAM Renewal
+   ✓ Saved: Data management Data Governance
+   ✓ Saved: RCBC SIEM Implem
+   ✓ Saved: Newport 2 months extension
+   ✓ Saved: UNOBank MCI Workshop
+   ✓ Saved: GMG AI
+   ✓ Saved: Phinma MSOC
+   ✓ Saved: ISO 27001 Kusumgar
+   ✓ Saved: Cybersecurity managed services
+   ✓ Saved: SDWAN
+📡 Fetching: Offset 900, Limit 50
+2026-01-30 14:20:56,079 - 📡 Fetching: Offset 900, Limit 50
+2026-01-30 14:21:01,875 - HTTP Request: GET https://eijs-test.fa.em2.oraclecloud.com/crmRestApi/resources/11.12.1.0/opportunities?q=StatusCode%3D%27OPEN%27&offset=900&limit=50&totalResults=true "HTTP/1.1 200 OK"
+   Processing 50 items...
+2026-01-30 14:21:28,982 -    Processing 50 items...
+   ✓ Saved: PAM KSDC recall
+   ✓ Saved: NDR Extrahop
+   ✓ Saved: OT Security UPL
+   ✓ Saved: Auxilo Finserve Limited EDR
+   ✓ Saved: XDR Jute Corporation
+   ✓ Saved: Phishrod security awareness training
+   ✓ Saved: AI DDecor
+   ✓ Saved: Native cloud D360
+   ✓ Saved: IRCTC WAF
+   ✓ Saved: PBB Vulnerability Management
+   ✓ Saved: Qiddiya OT
+   ✓ Saved: APML SOC discussion
+   ✓ Saved: IRCTC SOC
+   ✓ Saved: APL Apollo ZTNA
+   ✓ Saved: DLP
+   ✓ Saved: IAM opportunity
+   ✓ Saved: Mobile Pen Test for AR
+   ✓ Saved: SASE
+   ✓ Saved: Brand Protection
+   ✓ Saved: Syrma SGS Network Assessement
+   ✓ Saved: PCI HIPAA Assessment 2026
+   ✓ Saved: SOC
+   ✓ Saved: TVM Vision Bank
+   ✓ Saved: Indiamart CSPM
+   ✓ Saved: PAM UPL
+   ✓ Saved: Proxy L and T Sufin
+   ✓ Saved: HCL appscan 2025
+   ✓ Saved: Breach  Attack Simulation
+   ✓ Saved: UNOBank Additional ARCON PAM License
+   ✓ Saved: Pine Labs GRC resource
+   ✓ Saved: EXPO OT
+   ✓ Saved: GRC Tanweel
+   ✓ Saved: NGFW
+   ✓ Saved: DFIR
+   ✓ Saved: Highline Foods AD SME
+   ✓ Saved: HDFC Asset DAM
+   ✓ Saved: Dalmia EDR MSS
+   ✓ Saved: PSE Cisco Router Replacement
+   ✓ Saved: Email Security
+   ✓ Saved: IRCTC LB
+   ✓ Saved: 3B Fibreglass Meraki Cloud License
+   ✓ Saved: Cybersecurity Strategy
+   ✓ Saved: Franklin HCI
+   ✓ Saved: Karnataka Bank SECPOD
+   ✓ Saved: PBB Patch Management
+   ✓ Saved: AUB PAM
+   ✓ Saved: JMFL Cloud Security Assesment
+   ✓ Saved: Netradyne SECPOD
+   ✓ Saved: TEST2026
+   ✓ Saved: clover1
+📡 Fetching: Offset 950, Limit 50
+2026-01-30 14:21:29,117 - 📡 Fetching: Offset 950, Limit 50
+2026-01-30 14:21:32,462 - HTTP Request: GET https://eijs-test.fa.em2.oraclecloud.com/crmRestApi/resources/11.12.1.0/opportunities?q=StatusCode%3D%27OPEN%27&offset=950&limit=50&totalResults=true "HTTP/1.1 200 OK"
+   Processing 8 items...
+2026-01-30 14:21:32,467 -    Processing 8 items...
+   ✓ Saved: SMIC iZOOlogic Brand Protection
+   ✓ Saved: test111
+   ✓ Saved: Database Activity Monitoring
+   ✓ Saved: New Opportunity
+   ✓ Saved: New Opportunity test
+   ✓ Saved: Test oracle
+   ✓ Saved: Starhub CTI
+   ✓ Saved: Tata Tele Email automation
+✅ Reached end of data (hasMore=false)
+2026-01-30 14:21:32,497 - ✅ Reached end of data (hasMore=false)
+🎉 Sync Complete! Total Saved: 958 opportunities
+2026-01-30 14:21:32,498 - 🎉 Sync Complete! Total Saved: 958 opportunities       
+INFO:     127.0.0.1:56444 - "GET /api/inbox/unassigned HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56444 - "GET /api/inbox/unassigned HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56445 - "GET /api/auth/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56444 - "GET /api/auth/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56454 - "GET /api/inbox/unassigned HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56455 - "GET /api/auth/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56454 - "GET /api/inbox/unassigned HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56455 - "GET /api/auth/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56468 - "GET /api/inbox/debug-assignments HTTP/1.1" 200 OK
+🔍 Querying opportunities from database...
+📊 Found 962 opportunities in database
+INFO:     127.0.0.1:56468 - "GET /api/opportunities/ HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\fastapi\applications.py", line 1135, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\middleware\cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)     
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\routing.py", line 716, in __call__    
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\routing.py", line 290, in handle      
+    await self.app(scope, receive, send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)       
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\fastapi\routing.py", line 245, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync       
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2502, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 986, in run  
+    result = context.run(func, *args)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\app\routers\opportunities.py", line 70, in get_all_opportunities       
+    if not has_ratings:
+           ^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'has_ratings' where it is not associated with a value
+INFO:     127.0.0.1:56469 - "GET /favicon.ico HTTP/1.1" 204 No Content
+🔍 Querying opportunities from database...
+📊 Found 962 opportunities in database
+INFO:     127.0.0.1:56469 - "GET /api/opportunities/ HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\fastapi\applications.py", line 1135, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\middleware\cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)     
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\routing.py", line 716, in __call__    
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\routing.py", line 290, in handle      
+    await self.app(scope, receive, send)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)       
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\fastapi\routing.py", line 245, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\starlette\concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync       
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2502, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 986, in run  
+    result = context.run(func, *args)
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\app\routers\opportunities.py", line 70, in get_all_opportunities       
+    if not has_ratings:
+           ^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'has_ratings' where it is not associated with a value

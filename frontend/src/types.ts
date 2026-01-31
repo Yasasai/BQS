@@ -49,6 +49,7 @@ export interface Opportunity {
     // Lock
     locked_by?: string;
     locked_at?: string;
+    version_no?: number;
 }
 
 export interface Assessment {

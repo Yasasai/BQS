@@ -111,6 +111,7 @@ class OppScoreVersion(Base):
     created_by_user_id = Column(String, ForeignKey("app_user.user_id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     submitted_at = Column(DateTime, nullable=True)
+    attachment_name = Column(String, nullable=True) # Added for evidence upload
 
     opportunity = relationship("Opportunity", back_populates="score_versions")
     section_values = relationship("OppScoreSectionValue", back_populates="score_version")
@@ -128,8 +129,9 @@ class OppScoreSectionValue(Base):
     score_version_id = Column(String, ForeignKey("opp_score_version.score_version_id"), nullable=False)
     section_code = Column(String, ForeignKey("opp_score_section.section_code"), nullable=False)
     
-    score = Column(Integer, nullable=False) # 1..5
+    score = Column(Float, nullable=False) # Changed from Integer to Float for 0.5 steps
     notes = Column(Text, nullable=True)
+    selected_reasons = Column(JSON, nullable=True) # Added for chips
 
     score_version = relationship("OppScoreVersion", back_populates="section_values")
 
@@ -175,6 +177,32 @@ def init_db():
             db.add(sa)
             db.flush()
             db.add(UserRole(user_id=sa.user_id, role_id=2))
+
+        # --- NEW: Specific Users for Frontend Mocks ---
+        # 1. Practice Head (PH_001)
+        if not db.query(AppUser).filter_by(user_id="PH_001").first():
+            ph_user = AppUser(
+                user_id="PH_001", 
+                email="practice.head@company.com", 
+                display_name="Practice Head (Sarah)"
+            )
+            db.add(ph_user)
+            db.flush()
+            # Ensure Role 3 exists? Reuse role 1 (Lead) or create 3 (Practice Head)
+            # Let's verify roles. existing code only has 1 and 2.
+            # I'll assign role 1 (Sales Lead) to PH for now as proxy.
+            db.add(UserRole(user_id="PH_001", role_id=1))
+
+        # 2. Solution Architect (SA_001)
+        if not db.query(AppUser).filter_by(user_id="SA_001").first():
+            sa_user = AppUser(
+                user_id="SA_001", 
+                email="architect.john@company.com", 
+                display_name="John Architect"
+            )
+            db.add(sa_user)
+            db.flush()
+            db.add(UserRole(user_id="SA_001", role_id=2))
 
         # Sections
         if not db.query(OppScoreSection).first():

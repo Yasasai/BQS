@@ -22,9 +22,13 @@ def log(msg):
     logging.info(msg)
 
 try:
-    from backend.database import SessionLocal, Opportunity, init_db, Practice
+    from backend.app.core.database import SessionLocal, init_db
+    from backend.app.models import Opportunity, Practice
 except ImportError:
-    from database import SessionLocal, Opportunity, init_db, Practice
+    # Fallback/Direct run support
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from backend.app.core.database import SessionLocal, init_db
+    from backend.app.models import Opportunity, Practice
 
 def map_oracle_to_db(item, db: Session):
     """Map Oracle JSON to our Opportunity model"""
@@ -87,9 +91,9 @@ def sync_opportunities():
     init_db()
     db = SessionLocal()
     
-    endpoint = f"{ORACLE_BASE_URL}/crmRestApi/resources/latest/opportunities"
+    endpoint = f"{ORACLE_BASE_URL}/crmRestApi/resources/11.12.1.0/opportunities"
     
-    # MINIMAL params - NO filters, NO field selection
+    # Filter for OPEN opportunities using the specific version
     limit = 50
     offset = 0
     total_saved = 0
@@ -97,8 +101,10 @@ def sync_opportunities():
     with httpx.Client(auth=(ORACLE_USER, ORACLE_PASSWORD), timeout=60.0) as client:
         while True:
             params = {
+                "q": "StatusCode='OPEN'",
                 "offset": offset,
-                "limit": limit
+                "limit": limit,
+                "totalResults": "true"
             }
             
             log(f"📡 Fetching: Offset {offset}, Limit {limit}")

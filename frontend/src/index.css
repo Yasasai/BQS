@@ -2,9 +2,403 @@
 @tailwind components;
 @tailwind utilities;
 
-
+/* Oracle Inspira Theme - Color Palette & Variables */
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  background-color: #F1EFED;
-  color: #312E2B;
+  /* Oracle Inspira Colors */
+  --oracle-cream: #F5F1E3;
+  --oracle-yellow: #FFE082;
+  --oracle-red: #C62828;
+  --oracle-dark-text: #212121;
+  --oracle-gray-text: #757575;
+  --oracle-border: #E0E0E0;
+  --oracle-hover: #FFF9C4;
+  --oracle-green: #2E7D32;
+  --oracle-blue: #1976D2;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+
+  /* Typography */
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+
+  /* Borders */
+  --border-radius: 4px;
+  --border-width: 1px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  color: var(--oracle-dark-text);
+  background-color: #FFFFFF;
+  line-height: 1.5;
+}
+
+/* Oracle Header Styles */
+.oracle-header {
+  background-color: var(--oracle-cream);
+  border-bottom: 1px solid var(--oracle-border);
+  padding: var(--spacing-md) var(--spacing-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+}
+
+.oracle-logo {
+  font-size: 24px;
+  font-weight: 300;
+  color: var(--oracle-dark-text);
+  letter-spacing: 2px;
+}
+
+.oracle-logo-badge {
+  display: inline-block;
+  background-color: var(--oracle-red);
+  color: white;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: bold;
+  margin-left: 8px;
+  border-radius: 2px;
+}
+
+.oracle-header-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+.oracle-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--spacing-sm);
+  color: var(--oracle-dark-text);
+  position: relative;
+  transition: background-color 0.2s;
+  border-radius: var(--border-radius);
+}
+
+.oracle-icon-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.oracle-icon-btn .badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background-color: var(--oracle-red);
+  color: white;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Page Title */
+.oracle-page-title {
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--oracle-border);
+  background-color: white;
+}
+
+.oracle-page-title h1 {
+  font-size: var(--font-size-xl);
+  font-weight: 400;
+  color: var(--oracle-dark-text);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.oracle-help-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--oracle-gray-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--oracle-gray-text);
+  cursor: help;
+}
+
+/* Toolbar */
+.oracle-toolbar {
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: white;
+  border-bottom: 1px solid var(--oracle-border);
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.oracle-search-group {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+.oracle-search-label {
+  font-size: var(--font-size-sm);
+  color: var(--oracle-dark-text);
+  font-weight: 500;
+}
+
+.oracle-input {
+  padding: 6px 12px;
+  border: 1px solid var(--oracle-border);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-md);
+  min-width: 200px;
+}
+
+.oracle-input:focus {
+  outline: none;
+  border-color: var(--oracle-blue);
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.1);
+}
+
+.oracle-select {
+  padding: 6px 32px 6px 12px;
+  border: 1px solid var(--oracle-border);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-md);
+  background-color: white;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23757575' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+
+.oracle-btn {
+  padding: 6px 16px;
+  border: 1px solid var(--oracle-border);
+  border-radius: var(--border-radius);
+  background-color: white;
+  cursor: pointer;
+  font-size: var(--font-size-md);
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.oracle-btn:hover {
+  background-color: var(--oracle-hover);
+  border-color: var(--oracle-dark-text);
+}
+
+.oracle-btn-primary {
+  background-color: var(--oracle-blue);
+  color: white;
+  border-color: var(--oracle-blue);
+}
+
+.oracle-btn-primary:hover {
+  background-color: #1565C0;
+  border-color: #1565C0;
+}
+
+.oracle-toolbar-spacer {
+  flex: 1;
+}
+
+/* View Selector */
+.oracle-view-selector {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: white;
+  border-bottom: 1px solid var(--oracle-border);
+}
+
+.oracle-view-label {
+  font-size: var(--font-size-sm);
+  color: var(--oracle-dark-text);
+  font-weight: 500;
+}
+
+/* Table Styles */
+.oracle-table-container {
+  background-color: white;
+  overflow-x: auto;
+}
+
+.oracle-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.oracle-table thead {
+  background-color: #FAFAFA;
+  border-bottom: 2px solid var(--oracle-border);
+}
+
+.oracle-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--oracle-dark-text);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--oracle-border);
+}
+
+.oracle-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--oracle-border);
+  color: var(--oracle-dark-text);
+}
+
+.oracle-table tbody tr:hover {
+  background-color: var(--oracle-hover);
+  cursor: pointer;
+}
+
+.oracle-table tbody tr.selected {
+  background-color: #E3F2FD;
+}
+
+/* Win Probability Badge */
+.oracle-win-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.oracle-win-badge.high {
+  background-color: var(--oracle-green);
+  color: white;
+}
+
+.oracle-win-badge.medium {
+  background-color: var(--oracle-yellow);
+  color: var(--oracle-dark-text);
+}
+
+.oracle-win-badge.low {
+  background-color: #FFCDD2;
+  color: var(--oracle-red);
+}
+
+/* Link Styles */
+.oracle-link {
+  color: var(--oracle-blue);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.oracle-link:hover {
+  text-decoration: underline;
+}
+
+/* Status Badge */
+.oracle-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.oracle-status-badge.committed {
+  background-color: #E8F5E9;
+  color: var(--oracle-green);
+}
+
+.oracle-status-badge.forecast {
+  background-color: #FFF3E0;
+  color: #E65100;
+}
+
+/* Utility Classes */
+.text-right {
+  text-align: right;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-muted {
+  color: var(--oracle-gray-text);
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F5F5F5;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #BDBDBD;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9E9E9E;
+}
+
+/* Loading State */
+.oracle-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+  color: var(--oracle-gray-text);
+}
+
+/* Empty State */
+.oracle-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+  color: var(--oracle-gray-text);
+  text-align: center;
+}
+
+.oracle-empty-icon {
+  font-size: 48px;
+  margin-bottom: var(--spacing-md);
+  opacity: 0.3;
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Opportunity } from '../types';
 import { ChevronLeft, ChevronRight, Save, Send, AlertTriangle } from 'lucide-react';
+import { useUser } from '../context/UserContext';
 
 interface Props {
     opportunity: Opportunity;
@@ -13,9 +14,9 @@ const QUESTIONS = [
     { id: 'q2', text: 'Are resources available in the required timeframe?', category: 'Feasibility' },
     { id: 'q3', text: 'Is this a strategic account for the practice?', category: 'Strategic' },
     { id: 'q4', text: 'Do we have a pre-existing relationship with the CIO?', category: 'Relationship' },
-];
 
 export const ScoringWizard: React.FC<Props> = ({ opportunity, onClose, onSuccess }) => {
+    const { currentUser } = useUser();
     const [step, setStep] = useState(0);
     const [scores, setScores] = useState<Record<string, number>>({});
     const [notes, setNotes] = useState('');
@@ -26,33 +27,51 @@ export const ScoringWizard: React.FC<Props> = ({ opportunity, onClose, onSuccess
         if (step < QUESTIONS.length - 1) setStep(step + 1);
     };
 
-    const calculateFinalScore = () => {
-        const vals = Object.values(scores);
-        if (vals.length === 0) return 0;
-        return (vals.reduce((a, b) => a + b, 0) / (QUESTIONS.length * 10)) * 100;
-    };
-
     const handleFinalSubmit = async (isDraft: boolean) => {
+        if (!currentUser) {
+            console.error("No user logged in, cannot submit assessment.");
+            return;
+        }
+
         setIsSubmitting(true);
-        const finalScore = calculateFinalScore();
+
+        // Construct the ScoreInput payload expected by backend
+        const sectionInputs = QUESTIONS.map(q => ({
+            section_code: q.id,
+            score: scores[q.id] || 0,
+            notes: "", // Per-section notes not yet in UI
+            selected_reasons: []
+        }));
+
+        const payload = {
+            user_id: currentUser.user_id,
+            sections: sectionInputs,
+            summary_comment: notes,
+            confidence_level: "High", // Default/Placeholder
+            recommendation: "Review", // Default/Placeholder
+            attachment_name: null
+        };
+
+        const endpoint = isDraft ? 'draft' : 'submit';
+        // Use remote_id (Oracle ID) if available, otherwise id
+        const oppId = opportunity.remote_id || opportunity.id;
 
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${opportunity.id}/submit-assessment`, {
+            const response = await fetch(`http://localhost:8000/api/scoring/${oppId}/${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    score: finalScore,
-                    notes: notes,
-                    is_draft: isDraft
-                }),
+                body: JSON.stringify(payload),
             });
 
             if (response.ok) {
                 onSuccess();
                 onClose();
+            } else {
+                console.error("Submission failed:", await response.text());
+                // Optional: Show error to user
             }
         } catch (err) {
-            console.error(err);
+            console.error("Network error:", err);
         } finally {
             setIsSubmitting(false);
         }
@@ -86,8 +105,8 @@ export const ScoringWizard: React.FC<Props> = ({ opportunity, onClose, onSuccess
                                         key={v}
                                         onClick={() => handleScore(v)}
                                         className={`h-12 rounded-xl border-2 font-bold text-sm transition-all ${scores[QUESTIONS[step].id] === v
-                                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-lg ring-4 ring-indigo-500/10'
-                                                : 'border-gray-100 bg-white text-gray-400 hover:border-indigo-200 hover:text-indigo-500'
+                                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-lg ring-4 ring-indigo-500/10'
+                                            : 'border-gray-100 bg-white text-gray-400 hover:border-indigo-200 hover:text-indigo-500'
                                             }`}
                                     >
                                         {v}
@@ -141,8 +160,8 @@ export const ScoringWizard: React.FC<Props> = ({ opportunity, onClose, onSuccess
                             onClick={() => handleFinalSubmit(false)}
                             disabled={Object.keys(scores).length < QUESTIONS.length || isSubmitting}
                             className={`px-8 py-3 text-sm font-black text-white rounded-xl shadow-lg transition-all flex items-center gap-2 ${Object.keys(scores).length < QUESTIONS.length || isSubmitting
-                                    ? 'bg-indigo-300 cursor-not-allowed'
-                                    : 'bg-indigo-600 hover:bg-indigo-700 hover:-translate-y-0.5 active:translate-y-0'
+                                ? 'bg-indigo-300 cursor-not-allowed'
+                                : 'bg-indigo-600 hover:bg-indigo-700 hover:-translate-y-0.5 active:translate-y-0'
                                 }`}
                         >
                             <Send size={16} /> {isSubmitting ? 'Submitting...' : 'Final Submission'}
