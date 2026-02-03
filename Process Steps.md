@@ -1,0 +1,59 @@
+**1️⃣ Is Your Current Approach “Wrong”?**
+
+
+
+No. It’s NOT wrong for first-time ingestion.
+
+In fact:
+
+
+
+✔ Offset + limit pagination
+
+✔ StatusCode filter
+
+✔ Sequential persistence
+
+✔ Logging every batch
+
+
+
+This is exactly how most teams do Day-1 ingestion.
+
+
+
+So you are not making a mistake.
+
+
+
+First time Process to ingest data from Oracle CRM to PostgreSQL via API Call (crmrestAPI)
+
+
+
+**Downsides of your current approach:**
+
+
+
+Offset pagination becomes slower at higher offsets
+
+One-by-one inserts = heavy DB overhead
+
+Re-fetching everything every run = wasteful
+
+No change-detection strategy
+
+
+
+--------------------------------------------------------------------------------------------------------------------------
+
+
+
+**Doing a reset now:** 
+
+
+
+
+
+
+
+

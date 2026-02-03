@@ -1,5 +1,6 @@
 export interface Opportunity {
-    id: number;
+    id: string;
+    row_id?: string;
     remote_id: string; // Oracle Opportunity Number
     name: string;      // Oracle Name
     customer: string;  // Oracle Account
@@ -49,6 +50,7 @@ export interface Opportunity {
     // Lock
     locked_by?: string;
     locked_at?: string;
+    version_no?: number;
 }
 
 export interface Assessment {

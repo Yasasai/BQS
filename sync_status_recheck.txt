@@ -1,0 +1,11 @@
+🔹 Reading SyncMeta table...
+❌ Error: (psycopg2.errors.UndefinedColumn) column sync_meta.meta_key does not exist
+LINE 1: SELECT sync_meta.meta_key AS sync_meta_meta_key, sync_meta.l...
+               ^
+
+[SQL: SELECT sync_meta.meta_key AS sync_meta_meta_key, sync_meta.last_sync_timestamp AS sync_meta_last_sync_timestamp, sync_meta.sync_status AS sync_meta_sync_status, sync_meta.records_processed AS sync_meta_records_processed, sync_meta.extra_info AS sync_meta_extra_info 
+FROM sync_meta 
+WHERE sync_meta.meta_key = %(meta_key_1)s 
+ LIMIT %(param_1)s]
+[parameters: {'meta_key_1': 'oracle_opportunities', 'param_1': 1}]
+(Background on this error at: https://sqlalche.me/e/20/f405)

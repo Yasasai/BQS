@@ -1,0 +1,69 @@
+Oracle Sync Improvement Walkthrough
+This guide explains the changes made to improve the data fetching mechanism using Delta Fetch and Bulk Upsert.
+
+Changes Implemented
+Sync Metadata Table (sync_meta):
+
+A new table to track the last_sync_timestamp.
+This allows the system to know when to fetch data from.
+Enhanced Sync Script (
+
+enhanced_oracle_sync.py
+):
+
+Delta Fetch: Checks sync_meta for the last successful sync time.
+If found, it asks Oracle for records updated since that time (LastUpdateDate > timestamp).
+If not found (first run), it performs a full sync.
+Bulk Upsert: Uses INSERT ... ON CONFLICT DO UPDATE to efficiently insert or update thousands of records in a single database transaction.
+How to Verify
+Since the enhanced sync relies on the database state, follow these steps to verify it works:
+
+1. Apply Schema Changes
+Ensure the sync_meta table exists.
+
+python scripts/apply_sync_meta.py
+You can verify this by running python scripts/check_sync_status.py which should show an empty or initial record.
+
+2. Run the Enhanced Sync
+Run the main sync script. The first run will be a Full Sync because there is no history.
+
+python scripts/enhanced_oracle_sync.py
+Expected Output:
+
+Logs showing "Full Sync Mode".
+Fetching batch ... (fetching all records).
+Upserted X records.
+Sync completed successfully.
+3. Verify Timestamp Update
+Check the status again to see the last_sync_timestamp.
+
+python scripts/check_sync_status.py
+Expected Output:
+
+Key: 
+
+oracle_opportunities
+Last Sync: 2024-XX-XX ... (current time)
+4. Test Delta Sync
+Run the sync script a second time immediately.
+
+python scripts/enhanced_oracle_sync.py
+Expected Output:
+
+Logs showing "Delta Sync Mode".
+Fetching changes since [timestamp].
+Should fetch 0 records (or very few if active updates are happening).
+This confirms it is ONLY fetching changes for better performance.
+Key Files
+
+backend/migrations/sync_meta.sql
+: Schema definition.
+
+scripts/enhanced_oracle_sync.py
+: The new, faster sync logic.
+
+scripts/check_sync_status.py
+: Helper to view sync state.
+
+scripts/apply_sync_meta.py
+: Helper to apply the schema.

@@ -1,336 +1,313 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Opportunity } from '../types';
 import { TopBar } from '../components/TopBar';
-import { ChevronDown, MoreHorizontal, Filter, UserPlus, CheckCircle, XCircle } from 'lucide-react';
+import { ChevronDown, MoreHorizontal, Filter, UserPlus, CheckCircle, XCircle, RefreshCw, Download, Link as LinkIcon, Search, TrendingUp, Users } from 'lucide-react';
 import { AssignArchitectModal, AssignmentData } from '../components/AssignArchitectModal';
+import { OpportunitiesTable } from '../components/OpportunitiesTable';
+import { Pagination } from '../components/Pagination';
+import { ManageUsersModal } from '../components/ManageUsersModal';
 
-type TabType = 'unassigned' | 'under-assessment' | 'pending-review' | 'all';
+type TabType = 'all' | 'unassigned' | 'assigned' | 'review' | 'completed';
+
+const TAB_LABELS: Record<string, string> = {
+    'all': 'All Opportunities',
+    'unassigned': 'Assign Pipeline',
+    'assigned': 'Work Pipeline',
+    'review': 'Review Pipeline',
+    'completed': 'Completed Assessments'
+};
 
 export function PracticeHeadDashboard() {
     const navigate = useNavigate();
+    const { user } = useAuth();
+    const location = useLocation();
+
+    // Data State
     const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
     const [loading, setLoading] = useState(true);
+    const [totalCount, setTotalCount] = useState(0);
+    const [globalPipelineValue, setGlobalPipelineValue] = useState(0);
+    const [tabCounts, setTabCounts] = useState<Record<string, number>>({});
+
+    // Pagination & Search State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+
     const [activeTab, setActiveTab] = useState<TabType>('unassigned');
+    const [viewMode, setViewMode] = useState('All Opportunities');
 
     // Modal state
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-    const [selectedOppId, setSelectedOppId] = useState<number[]>([]);
-
-    // Mock: In real app, get from auth context
-    const currentPracticeHead = "John Doe"; // Replace with actual logged-in user
-    const currentPractice = "Cloud Infrastructure"; // Replace with actual user's practice
+    const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+    const [selectedOppId, setSelectedOppId] = useState<string[]>([]);
 
     // Action menu state
-    const [openActionMenu, setOpenActionMenu] = useState<number | null>(null);
+    const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
 
+    // Role-based Access Control
+    useEffect(() => {
+        if (user?.role === 'SOLUTION_ARCHITECT') {
+            navigate('/assigned-to-me');
+        }
+    }, [user, navigate]);
+
+    // Sync URL with Tab
+    useEffect(() => {
+        const path = location.pathname;
+        if (path.includes('unassigned')) setActiveTab('unassigned');
+        else if (path.includes('assigned')) setActiveTab('assigned');
+        else if (path.includes('review')) setActiveTab('review');
+        else if (path.includes('completed')) setActiveTab('completed');
+        else setActiveTab('all');
+    }, [location.pathname]);
+
+    // Debounce search
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm);
+            setCurrentPage(1); // Reset to page 1 on search
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
+
+    // Fetch on changes
     useEffect(() => {
         fetchOpportunities();
-    }, []);
+        setSelectedOppId([]); // Clear selection when tab/page/search changes
+    }, [currentPage, pageSize, debouncedSearch, activeTab]);
 
     const fetchOpportunities = () => {
+        console.log('🔄 Fetching opportunities page:', currentPage, 'Tab:', activeTab);
         setLoading(true);
-        fetch('http://localhost:8000/api/opportunities')
-            .then(res => res.json())
+
+        const params = new URLSearchParams({
+            page: currentPage.toString(),
+            limit: pageSize.toString(),
+            tab: activeTab
+        });
+        if (debouncedSearch) params.append('search', debouncedSearch);
+
+        fetch(`http://127.0.0.1:8000/api/opportunities/?${params}`)
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                return res.json();
+            })
             .then(data => {
-                // Filter to only show opportunities assigned to this practice head
-                const myOpportunities = data.filter((opp: Opportunity) =>
-                    opp.assigned_practice === currentPractice ||
-                    opp.assigned_practice_head === currentPracticeHead
-                );
-                setOpportunities(myOpportunities);
+                console.log('✅ Received data:', data);
+                if (data.items) {
+                    setOpportunities(data.items);
+                    setTotalCount(data.total_count);
+                    setGlobalPipelineValue(data.total_value || 0);
+                    if (data.counts) setTabCounts(data.counts);
+                } else {
+                    setOpportunities(data);
+                    setTotalCount(data.length);
+                }
                 setLoading(false);
             })
             .catch(err => {
-                console.error("Failed to fetch opportunities", err);
+                console.error("❌ Failed to fetch opportunities:", err);
                 setLoading(false);
             });
     };
 
-    // Calculate tab counts
-    const unassignedCount = opportunities.filter(o =>
-        o.workflow_status === 'ASSIGNED_TO_PRACTICE' && !o.assigned_sa
-    ).length;
 
-    const underAssessmentCount = opportunities.filter(o =>
-        ['ASSIGNED_TO_SA', 'UNDER_ASSESSMENT'].includes(o.workflow_status || '')
-    ).length;
+    // --- filtering for Display ---
+    const filteredOpportunities = opportunities;
 
-    const pendingReviewCount = opportunities.filter(o =>
-        o.workflow_status === 'SUBMITTED_FOR_REVIEW'
-    ).length;
-
-    // Filter opportunities based on active tab
-    const getFilteredOpportunities = () => {
-        let filtered = opportunities;
-
-        if (activeTab === 'unassigned') {
-            filtered = filtered.filter(o =>
-                o.workflow_status === 'ASSIGNED_TO_PRACTICE' && !o.assigned_sa
-            );
-        } else if (activeTab === 'under-assessment') {
-            filtered = filtered.filter(o =>
-                ['ASSIGNED_TO_SA', 'UNDER_ASSESSMENT'].includes(o.workflow_status || '')
-            );
-        } else if (activeTab === 'pending-review') {
-            filtered = filtered.filter(o =>
-                o.workflow_status === 'SUBMITTED_FOR_REVIEW'
-            );
-        }
-
-        return filtered;
-    };
-
-    const filteredOpportunities = getFilteredOpportunities();
-
-    // Handle assign to SA
-    const handleAssignToSA = async (oppId: number, primarySA: string, secondarySA?: string) => {
+    const handleAssignToSA = async (oppIds: string | string[], primarySA: string, secondarySA?: string) => {
+        const idsToAssign = Array.isArray(oppIds) ? oppIds : [oppIds];
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${oppId}/assign-sa`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    primary_sa: primarySA,
-                    secondary_sa: secondarySA
+            await Promise.all(idsToAssign.map(id =>
+                fetch('http://127.0.0.1:8000/api/inbox/assign', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        opp_id: id.toString(),
+                        sa_email: primarySA,
+                        assigned_by_user_id: user?.id || 'PRACTICE_HEAD'
+                    })
                 })
-            });
-
-            if (!response.ok) throw new Error('Failed to assign SA');
-
-            alert(`Assigned to ${primarySA}`);
+            ));
             fetchOpportunities();
-        } catch (error) {
-            console.error('Error:', error);
-            alert('Failed to assign SA');
+            setIsAssignModalOpen(false);
+            setSelectedOppId([]);
+        } catch (err) {
+            console.error('❌ Assignment error:', err);
+            alert(`Failed to assign: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
     };
 
-    // Handle review decision
-    const handleReviewDecision = async (oppId: number, decision: 'APPROVED' | 'REJECTED', comments: string) => {
+    const handleApprove = async (oppIds: string | string[]) => {
+        const ids = Array.isArray(oppIds) ? oppIds : [oppIds];
+        if (!confirm(`Approve ${ids.length} assessment(s)?`)) return;
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${oppId}/practice-review`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ decision, comments })
-            });
-
-            if (!response.ok) throw new Error('Failed to submit review');
-
-            alert(`Assessment ${decision.toLowerCase()}`);
+            await Promise.all(ids.map(id =>
+                fetch(`http://127.0.0.1:8000/api/scoring/${id}/review/approve`, { method: 'POST' })
+            ));
             fetchOpportunities();
-        } catch (error) {
-            console.error('Error:', error);
-            alert('Failed to submit review');
+            setSelectedOppId([]);
+        } catch (e) {
+            console.error(e);
+            alert("Approval failed");
         }
     };
 
-    const getStatusBadge = (status?: string) => {
-        const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
-            'ASSIGNED_TO_PRACTICE': { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Needs SA Assignment' },
-            'ASSIGNED_TO_SA': { bg: 'bg-blue-100', text: 'text-blue-800', label: 'With SA' },
-            'UNDER_ASSESSMENT': { bg: 'bg-indigo-100', text: 'text-indigo-800', label: 'In Progress' },
-            'SUBMITTED_FOR_REVIEW': { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Awaiting Review' },
-            'APPROVED_BY_PRACTICE': { bg: 'bg-green-100', text: 'text-green-800', label: 'Approved' },
-        };
-
-        const config = statusConfig[status || 'ASSIGNED_TO_PRACTICE'] || statusConfig['ASSIGNED_TO_PRACTICE'];
-        return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>{config.label}</span>;
+    const handleReject = async (oppIds: string | string[]) => {
+        const ids = Array.isArray(oppIds) ? oppIds : [oppIds];
+        const reason = prompt("Enter rejection reason for selected items:");
+        if (!reason) return;
+        try {
+            await Promise.all(ids.map(id =>
+                fetch(`http://127.0.0.1:8000/api/scoring/${id}/review/reject`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason })
+                })
+            ));
+            fetchOpportunities();
+            setSelectedOppId([]);
+        } catch (e) {
+            console.error(e);
+            alert("Rejection failed");
+        }
     };
+
+    const formatCurrency = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val);
 
     return (
-        <div className="min-h-screen bg-white flex flex-col font-sans text-gray-900">
-            <TopBar />
-
-            <div className="flex flex-col flex-1">
-                {/* Page Title */}
-                <div className="px-6 pt-6 pb-4">
-                    <h1 className="text-2xl font-semibold text-gray-900">Practice Head Dashboard</h1>
-                    <p className="text-sm text-gray-600 mt-1">Resource Allocation & Quality Assurance - {currentPractice}</p>
+        <div className="min-h-screen bg-white flex flex-col font-sans text-gray-900 overflow-x-hidden">
+            <TopBar title="Practice Head Dashboard" />
+            <div className="flex-1 px-4 py-4 w-full max-w-[1600px] mx-auto">
+                <div className="flex justify-between items-center mb-6">
+                    <div className="flex items-center gap-2">
+                        <h1 className="text-xl font-normal text-[#333333]">Opportunities</h1>
+                        <div className="w-5 h-5 rounded-full border border-gray-400 flex items-center justify-center text-[10px] text-gray-500 cursor-help">?</div>
+                    </div>
+                    <button
+                        onClick={() => setIsUserModalOpen(true)}
+                        className="flex items-center gap-2 px-3 py-1.5 text-[13px] font-normal text-[#333333] border border-gray-300 rounded bg-white hover:bg-gray-50"
+                    >
+                        <Users size={14} /> Manage Users
+                    </button>
                 </div>
 
-                {/* Tabs */}
-                <div className="px-6">
-                    <div className="flex gap-2 border-b border-gray-200">
+
+                {/* Tab Switcher */}
+                <div className="flex items-center gap-8 border-b border-gray-200 mb-6 mt-4">
+                    {(Object.keys(TAB_LABELS) as TabType[]).map((tabId) => (
                         <button
-                            onClick={() => setActiveTab('unassigned')}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors relative ${activeTab === 'unassigned' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
+                            key={tabId}
+                            onClick={() => navigate(`/practice-head/${tabId}`)}
+                            className={`pb-3 text-sm font-medium transition-all relative ${activeTab === tabId
+                                ? 'text-[#0572CE]'
+                                : 'text-[#666666] hover:text-[#333333]'
+                                }`}
                         >
-                            Unassigned ({unassignedCount})
-                            {unassignedCount > 0 && (
-                                <span className="absolute -top-1 -right-1 bg-purple-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                                    {unassignedCount}
-                                </span>
+                            {TAB_LABELS[tabId]} ({tabCounts[tabId] || 0})
+                            {activeTab === tabId && (
+                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0572CE]" />
                             )}
                         </button>
-                        <button
-                            onClick={() => setActiveTab('under-assessment')}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'under-assessment' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
-                        >
-                            Under Assessment ({underAssessmentCount})
+                    ))}
+                </div>
+
+                <div className="flex items-center justify-between py-2 mb-4 text-xs">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[13px] text-[#333333]">Find</span>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Search Name, Customer..."
+                                    className="border border-gray-300 rounded px-2 py-1.5 text-[13px] w-64 focus:outline-none focus:border-[#0572CE] bg-white pl-8"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => fetchOpportunities()} className="flex items-center gap-2 px-4 py-1.5 text-[13px] font-normal text-[#333333] bg-white border border-gray-300 rounded hover:bg-gray-50">
+                            <RefreshCw size={14} /> Refresh
                         </button>
-                        <button
-                            onClick={() => setActiveTab('pending-review')}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors relative ${activeTab === 'pending-review' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
-                        >
-                            Pending Review ({pendingReviewCount})
-                            {pendingReviewCount > 0 && (
-                                <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                                    {pendingReviewCount}
-                                </span>
-                            )}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('all')}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'all' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
-                        >
-                            All ({opportunities.length})
-                        </button>
+                        <button className="px-4 py-1.5 text-[13px] font-normal text-white bg-[#0572CE] rounded hover:bg-[#005a9e]">Create Opportunity</button>
                     </div>
                 </div>
 
-                {/* Action Summary */}
-                <div className="px-6 py-4 bg-white border-b border-gray-200">
-                    <div className="text-sm text-gray-600">
-                        <span className="font-semibold text-gray-900">{filteredOpportunities.length}</span> opportunities
-                        {activeTab === 'unassigned' && <span className="ml-2 text-purple-600 font-medium">→ Awaiting SA Assignment</span>}
-                        {activeTab === 'pending-review' && <span className="ml-2 text-orange-600 font-medium">→ Awaiting Your Review</span>}
+                {selectedOppId.length > 0 && (
+                    <div className="bg-[#E3F2FD] border border-[#BBDEFB] px-4 py-2 mb-4 rounded flex items-center justify-between">
+                        <span className="text-sm font-medium text-[#0D47A1]">{selectedOppId.length} item(s) selected</span>
+                        <div className="flex gap-2">
+                            {(() => {
+                                const selectedItems = opportunities.filter(o => selectedOppId.includes(o.id));
+                                const canAssign = selectedItems.length > 0; // Allow assigning/reassigning everything as requested
+                                const canReview = selectedItems.length > 0 && selectedItems.every(o => {
+                                    const s = (o.workflow_status || '').toUpperCase();
+                                    return s === 'SUBMITTED_FOR_REVIEW' || s === 'SUBMITTED';
+                                });
+                                return (
+                                    <>
+                                        {canAssign && (
+                                            <button onClick={() => setIsAssignModalOpen(true)} className="px-3 py-1 bg-[#1976D2] text-white text-xs font-medium rounded hover:bg-[#1565C0]">Assign / Reassign Selected</button>
+                                        )}
+                                        {canReview && (
+                                            <>
+                                                <button onClick={() => handleApprove(selectedOppId)} className="px-3 py-1 bg-[#43A047] text-white text-xs font-medium rounded hover:bg-[#2E7D32]">Accept Selected</button>
+                                                <button onClick={() => handleReject(selectedOppId)} className="px-3 py-1 bg-[#E53935] text-white text-xs font-medium rounded hover:bg-[#C62828]">Reject Selected</button>
+                                            </>
+                                        )}
+                                    </>
+                                );
+                            })()}
+                        </div>
                     </div>
+                )}
+
+                <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[13px] text-[#333333] font-medium">{TAB_LABELS[activeTab] || 'Opportunities'}</span>
                 </div>
 
-                {/* Table */}
-                <div className="flex-1 overflow-auto bg-white">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left w-12">
-                                    <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4" />
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Opp ID</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Name/Customer</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Deal Size</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Status</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Assigned SA</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Score</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {loading ? (
-                                <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-500">Loading...</td></tr>
-                            ) : filteredOpportunities.length === 0 ? (
-                                <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-500">No opportunities found</td></tr>
-                            ) : (
-                                filteredOpportunities.map((opp) => (
-                                    <tr key={opp.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4" />
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm font-medium text-blue-600 hover:underline cursor-pointer" onClick={() => navigate(`/opportunity/${opp.id}`)}>
-                                                {opp.remote_id || `OPP-${opp.id}`}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="text-sm font-medium text-gray-900">{opp.name}</div>
-                                            <div className="text-sm text-gray-500">{opp.customer}</div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {new Intl.NumberFormat('en-US', { style: 'currency', currency: opp.currency || 'USD', maximumFractionDigits: 0 }).format(opp.deal_value)}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            {getStatusBadge(opp.workflow_status)}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {opp.assigned_sa || <span className="text-gray-400 italic">Unassigned</span>}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {opp.win_probability ? `${Math.round(opp.win_probability)}%` : '-'}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
-                                            <button
-                                                onClick={() => setOpenActionMenu(openActionMenu === opp.id ? null : opp.id)}
-                                                className="text-gray-400 hover:text-gray-600"
-                                            >
-                                                <MoreHorizontal size={18} />
-                                            </button>
-                                            {openActionMenu === opp.id && (
-                                                <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-10 border border-gray-200">
-                                                    <div className="py-1">
-                                                        <button
-                                                            onClick={() => navigate(`/opportunity/${opp.id}`)}
-                                                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                                        >
-                                                            View Details
-                                                        </button>
-                                                        {opp.workflow_status === 'ASSIGNED_TO_PRACTICE' && !opp.assigned_sa && (
-                                                            <button
-                                                                onClick={() => {
-                                                                    setSelectedOppId([opp.id]);
-                                                                    setIsAssignModalOpen(true);
-                                                                    setOpenActionMenu(null);
-                                                                }}
-                                                                className="block w-full text-left px-4 py-2 text-sm text-purple-600 hover:bg-gray-100 font-medium"
-                                                            >
-                                                                <UserPlus size={14} className="inline mr-2" />
-                                                                Assign to SA
-                                                            </button>
-                                                        )}
-                                                        {opp.workflow_status === 'SUBMITTED_FOR_REVIEW' && (
-                                                            <>
-                                                                <div className="border-t border-gray-200 my-1"></div>
-                                                                <button
-                                                                    onClick={() => navigate(`/score/${opp.id}`)}
-                                                                    className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-gray-100"
-                                                                >
-                                                                    View Assessment
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        const comments = prompt('Approval Comments (optional):') || '';
-                                                                        if (window.confirm('Approve this assessment and send to Management?')) {
-                                                                            handleReviewDecision(opp.id, 'APPROVED', comments);
-                                                                        }
-                                                                    }}
-                                                                    className="block w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-gray-100 font-medium"
-                                                                >
-                                                                    <CheckCircle size={14} className="inline mr-2" />
-                                                                    Approve
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        const comments = prompt('Rejection Reason (required):');
-                                                                        if (comments && window.confirm('Reject and send back to SA for rework?')) {
-                                                                            handleReviewDecision(opp.id, 'REJECTED', comments);
-                                                                        }
-                                                                    }}
-                                                                    className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 font-medium"
-                                                                >
-                                                                    <XCircle size={14} className="inline mr-2" />
-                                                                    Reject (Rework)
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                <OpportunitiesTable
+                    opportunities={filteredOpportunities}
+                    loading={loading}
+                    onAssign={(opp) => { setSelectedOppId([opp.id]); setIsAssignModalOpen(true); }}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                    onView={(id, jumpToScore) => {
+                        if (jumpToScore) {
+                            navigate(`/score/${id}`);
+                        } else {
+                            navigate(`/opportunity/${id}`);
+                        }
+                    }}
+                    formatCurrency={formatCurrency}
+                    selectedIds={selectedOppId}
+                    onSelectionChange={setSelectedOppId}
+                />
+
+                <div className="mt-[-48px] relative z-10">
+                    <Pagination
+                        currentPage={currentPage}
+                        totalCount={totalCount}
+                        pageSize={pageSize}
+                        onPageChange={setCurrentPage}
+                    />
                 </div>
             </div>
 
-            {/* Modals */}
             <AssignArchitectModal
                 isOpen={isAssignModalOpen}
                 onClose={() => setIsAssignModalOpen(false)}
                 opportunityIds={selectedOppId}
-                onAssign={(data: AssignmentData) => {
-                    handleAssignToSA(selectedOppId[0], data.sa_owner, data.secondary_sa);
-                }}
+                onAssign={(data: AssignmentData) => { handleAssignToSA(selectedOppId, data.sa_owner, data.secondary_sa); }}
             />
+            <ManageUsersModal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} />
         </div>
     );
 }

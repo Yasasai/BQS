@@ -22,9 +22,13 @@ def log(msg):
     logging.info(msg)
 
 try:
-    from backend.database import SessionLocal, Opportunity, init_db, Practice
+    from backend.app.core.database import SessionLocal, init_db
+    from backend.app.models import Opportunity, Practice
 except ImportError:
-    from database import SessionLocal, Opportunity, init_db, Practice
+    # Fallback/Direct run support
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from backend.app.core.database import SessionLocal, init_db
+    from backend.app.models import Opportunity, Practice
 
 def map_oracle_to_db(item, db: Session):
     """Map Oracle JSON to our Opportunity model"""
@@ -87,9 +91,9 @@ def sync_opportunities():
     init_db()
     db = SessionLocal()
     
-    endpoint = f"{ORACLE_BASE_URL}/crmRestApi/resources/latest/opportunities"
+    endpoint = f"{ORACLE_BASE_URL}/crmRestApi/resources/11.12.1.0/opportunities"
     
-    # MINIMAL params - NO filters, NO field selection
+    # Filter for OPEN opportunities using the specific version
     limit = 50
     offset = 0
     total_saved = 0
@@ -97,8 +101,10 @@ def sync_opportunities():
     with httpx.Client(auth=(ORACLE_USER, ORACLE_PASSWORD), timeout=60.0) as client:
         while True:
             params = {
+                "q": "StatusCode='OPEN'",
                 "offset": offset,
-                "limit": limit
+                "limit": limit,
+                "totalResults": "true"
             }
             
             log(f"📡 Fetching: Offset {offset}, Limit {limit}")
@@ -151,10 +157,27 @@ def sync_opportunities():
                     
                 offset += limit
                 
+    
             except Exception as e:
                 log(f"💥 Request Error: {e}")
                 break
     
+    # Update Sync Meta
+    try:
+        from backend.app.models import SyncMeta
+        meta = db.query(SyncMeta).filter(SyncMeta.meta_key == "oracle_opportunities").first()
+        if not meta:
+            meta = SyncMeta(meta_key="oracle_opportunities")
+            db.add(meta)
+        
+        meta.last_sync_timestamp = datetime.utcnow()
+        meta.sync_status = "SUCCESS"
+        meta.records_processed = total_saved
+        db.commit()
+        log("✅ Sync timestamp updated in sync_meta")
+    except Exception as e:
+        log(f"⚠️ Failed to update sync_meta: {e}")
+
     db.close()
     log(f"🎉 Sync Complete! Total Saved: {total_saved} opportunities")
     return total_saved
