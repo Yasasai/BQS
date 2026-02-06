@@ -8,14 +8,15 @@ import { ArrowLeft, Save, Send, AlertTriangle, FileText, Upload, Trash2, CheckCi
 import '../styles/Assessment.css';
 
 const CRITERIA = [
-    { key: "STRAT", label: "Strategic Fit/Why Inspira?", weight: 0.15 },
-    { key: "WIN", label: "Win Probability", weight: 0.15 },
-    { key: "COMP", label: "Competitive Position/Incumbent", weight: 0.15 },
-    { key: "FIN", label: "Financial Value", weight: 0.15 },
-    { key: "RES", label: "Resource Availability", weight: 0.10 },
-    { key: "PAST", label: "Past Performance/References", weight: 0.10 },
-    { key: "CUST", label: "Customer Relationship", weight: 0.10 },
-    { key: "LEGAL", label: "Legal/Insurance/Bond Requirement", weight: 0.10 },
+    { key: "strategic_fit", label: "Strategic Fit", weight: 0.15 },
+    { key: "win_probability", label: "Win Probability", weight: 0.15 },
+    { key: "financial_value", label: "Financial Value", weight: 0.15 },
+    { key: "competitive_position", label: "Competitive Position", weight: 0.10 },
+    { key: "delivery_feasibility", label: "Delivery Feasibility", weight: 0.10 },
+    { key: "customer_relationship", label: "Customer Relationship", weight: 0.10 },
+    { key: "risk_exposure", label: "Risk Exposure", weight: 0.10 },
+    { key: "compliance", label: "Product / Service Compliance", weight: 0.05 },
+    { key: "legal_readiness", label: "Legal & Commercial Readiness", weight: 0.10 },
 ];
 
 export const ScoreOpportunity: React.FC = () => {
@@ -44,8 +45,8 @@ export const ScoreOpportunity: React.FC = () => {
     const [isIdentityEditable, setIsIdentityEditable] = useState(false);
     const [deadline, setDeadline] = useState("");
 
-    const isPH = user?.role === 'PRACTICE_HEAD';
-    const isSA = user?.role === 'SOLUTION_ARCHITECT';
+    const isPH = user?.role === 'PH';
+    const isSA = user?.role === 'SA' || user?.role === 'SP';
 
     const isEdit = status !== "NOT_STARTED";
     const isLocked = status === "SUBMITTED" || status === "APPROVED" || status === "REJECTED";

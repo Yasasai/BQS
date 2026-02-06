@@ -11,12 +11,22 @@ export function TopBar() {
     const handleRoleSwitch = (role: UserRole) => {
         login(role);
         setIsMenuOpen(false);
-        if (role === 'SOLUTION_ARCHITECT') {
+        if (role === 'SA' || role === 'SP') {
             navigate('/assigned-to-me');
+        } else if (role === 'GH' || role === 'SH') {
+            navigate('/management/dashboard');
         } else {
             navigate('/');
         }
     };
+
+    const ROLES: { code: UserRole; label: string; name: string }[] = [
+        { code: 'GH', label: 'Global Head', name: 'James Wilson' },
+        { code: 'PH', label: 'Practice Head', name: 'Sarah Mitchell' },
+        { code: 'SH', label: 'Sales Head', name: 'Robert Chen' },
+        { code: 'SA', label: 'Solution Architect', name: 'John Doe' },
+        { code: 'SP', label: 'Sales Presales', name: 'Emily White' },
+    ];
 
     return (
         <header className="bg-white border-b border-[#E5E7EB] h-16 flex items-center justify-between px-8 sticky top-0 z-50 shadow-sm">
@@ -36,10 +46,10 @@ export function TopBar() {
                 </div>
 
                 <nav className="flex items-center gap-6 ml-4">
-                    {user?.role === 'PRACTICE_HEAD' && (
+                    {['PH', 'GH', 'SH'].includes(user?.role || '') && (
                         <button
                             onClick={() => navigate('/')}
-                            className={`flex items-center gap-2 text-sm font-semibold transition-colors ${user?.role === 'PRACTICE_HEAD' ? 'text-[#2563EB]' : 'text-[#4B5563] hover:text-[#111827]'}`}
+                            className={`flex items-center gap-2 text-sm font-semibold transition-colors ${['PH', 'GH', 'SH'].includes(user?.role || '') ? 'text-[#2563EB]' : 'text-[#4B5563] hover:text-[#111827]'}`}
                         >
                             <Inbox size={16} />
                             Pipeline
@@ -47,7 +57,7 @@ export function TopBar() {
                     )}
                     <button
                         onClick={() => navigate('/assigned-to-me')}
-                        className={`flex items-center gap-2 text-sm font-semibold transition-colors ${user?.role === 'SOLUTION_ARCHITECT' ? 'text-[#2563EB]' : 'text-[#4B5563] hover:text-[#111827]'}`}
+                        className={`flex items-center gap-2 text-sm font-semibold transition-colors ${['SA', 'SP'].includes(user?.role || '') ? 'text-[#2563EB]' : 'text-[#4B5563] hover:text-[#111827]'}`}
                     >
                         <CheckSquare size={16} />
                         My Work
@@ -70,7 +80,7 @@ export function TopBar() {
                     >
                         <div className="flex flex-col items-end">
                             <span className="text-sm font-bold text-[#111827]">{user?.name || 'Guest User'}</span>
-                            <span className="text-[10px] text-[#6B7280] font-semibold uppercase tracking-wider">{user?.role?.replace('_', ' ') || 'No Role'}</span>
+                            <span className="text-[10px] text-[#6B7280] font-semibold uppercase tracking-wider">{ROLES.find(r => r.code === user?.role)?.label || user?.role || 'No Role'}</span>
                         </div>
                         <div className="h-9 w-9 rounded-full bg-[#F3F4F6] flex items-center justify-center text-[#6B7280] border border-[#E5E7EB]">
                             <UserCircle size={22} />
@@ -83,26 +93,19 @@ export function TopBar() {
                             <div className="px-4 py-2 border-b border-gray-50">
                                 <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">Switch Identity</p>
                             </div>
-                            <button
-                                onClick={() => handleRoleSwitch('PRACTICE_HEAD')}
-                                className="w-full text-left px-4 py-3 text-sm hover:bg-[#F9FAFB] flex items-center gap-3 transition-colors"
-                            >
-                                <div className={`w-2.5 h-2.5 rounded-full ${user?.role === 'PRACTICE_HEAD' ? 'bg-[#2563EB]' : 'bg-gray-200'}`}></div>
-                                <div className="flex flex-col">
-                                    <span className="font-semibold text-[#111827]">Practice Head</span>
-                                    <span className="text-[11px] text-[#6B7280]">Sarah Mitchell</span>
-                                </div>
-                            </button>
-                            <button
-                                onClick={() => handleRoleSwitch('SOLUTION_ARCHITECT')}
-                                className="w-full text-left px-4 py-3 text-sm hover:bg-[#F9FAFB] flex items-center gap-3 transition-colors"
-                            >
-                                <div className={`w-2.5 h-2.5 rounded-full ${user?.role === 'SOLUTION_ARCHITECT' ? 'bg-[#2563EB]' : 'bg-gray-200'}`}></div>
-                                <div className="flex flex-col">
-                                    <span className="font-semibold text-[#111827]">Solution Architect</span>
-                                    <span className="text-[11px] text-[#6B7280]">John Doe</span>
-                                </div>
-                            </button>
+                            {ROLES.map((roleInfo) => (
+                                <button
+                                    key={roleInfo.code}
+                                    onClick={() => handleRoleSwitch(roleInfo.code)}
+                                    className="w-full text-left px-4 py-3 text-sm hover:bg-[#F9FAFB] flex items-center gap-3 transition-colors"
+                                >
+                                    <div className={`w-2.5 h-2.5 rounded-full ${user?.role === roleInfo.code ? 'bg-[#2563EB]' : 'bg-gray-200'}`}></div>
+                                    <div className="flex flex-col">
+                                        <span className="font-semibold text-[#111827]">{roleInfo.label}</span>
+                                        <span className="text-[11px] text-[#6B7280]">{roleInfo.name}</span>
+                                    </div>
+                                </button>
+                            ))}
                         </div>
                     )}
                 </div>

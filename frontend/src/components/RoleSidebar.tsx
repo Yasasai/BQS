@@ -15,8 +15,9 @@ export const RoleSidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
 
     // Determine user role
-    const isPracticeHead = user?.role === 'PRACTICE_HEAD';
-    const isSolutionArchitect = user?.role === 'SOLUTION_ARCHITECT';
+    const isPracticeHead = user?.role === 'PH';
+    const isSolutionArchitect = user?.role === 'SA' || user?.role === 'SP';
+    const isManagement = user?.role === 'GH' || user?.role === 'SH';
 
     const handleNavigation = (path: string) => {
         navigate(path);
@@ -98,6 +99,26 @@ export const RoleSidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 {/* Menu Items */}
                 <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
 
+                    {isManagement && (
+                        <>
+                            <div style={{
+                                padding: '8px 16px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                color: '#757575',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px'
+                            }}>
+                                Management
+                            </div>
+
+                            <MenuItem
+                                icon={<TrendingUp size={18} />}
+                                label="Management Dashboard"
+                                onClick={() => handleNavigation('/management/dashboard')}
+                            />
+                        </>
+                    )}
 
                     {isPracticeHead && (
                         <>
@@ -107,7 +128,8 @@ export const RoleSidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                                 fontWeight: 600,
                                 color: '#757575',
                                 textTransform: 'uppercase',
-                                letterSpacing: '0.5px'
+                                letterSpacing: '0.5px',
+                                marginTop: isManagement ? '16px' : '0'
                             }}>
                                 Practice Head
                             </div>
@@ -154,7 +176,7 @@ export const RoleSidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                                 color: '#757575',
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.5px',
-                                marginTop: isPracticeHead ? '16px' : '0'
+                                marginTop: (isPracticeHead || isManagement) ? '16px' : '0'
                             }}>
                                 Solution Architect
                             </div>
