@@ -4,13 +4,14 @@ import { CheckCircle, XCircle, Link as LinkIcon, UserPlus } from 'lucide-react';
 
 interface OpportunityRowProps {
     opp: Opportunity;
-    onAssign: (opp: Opportunity) => void;
+    onAssign: (opp: Opportunity, type?: 'PH' | 'SH' | 'SA' | 'SP') => void;
     onApprove: (id: string) => void;
     onReject: (id: string) => void;
     onView: (id: string, jumpToScore?: boolean) => void;
     formatCurrency: (val: number) => string;
     selected: boolean;
     onSelect: (id: string, checked: boolean) => void;
+    role?: 'GH' | 'PH' | 'SH' | 'SA' | 'SP';
 }
 
 export const OpportunityRow: React.FC<OpportunityRowProps> = ({
@@ -21,7 +22,8 @@ export const OpportunityRow: React.FC<OpportunityRowProps> = ({
     onView,
     formatCurrency,
     selected,
-    onSelect
+    onSelect,
+    role = 'GH'
 }) => {
     return (
         <tr
@@ -62,15 +64,18 @@ export const OpportunityRow: React.FC<OpportunityRowProps> = ({
                     if (['NEW', 'OPEN'].includes(status)) {
                         styles = 'bg-slate-100 text-slate-600 border border-slate-200';
                         label = 'New';
-                    } else if (status === 'ASSIGNED_TO_SA') {
+                    } else if (status === 'HEADS_ASSIGNED') {
                         styles = 'bg-blue-50 text-blue-700 border border-blue-100';
-                        label = 'Assigned';
-                    } else if (status === 'UNDER_ASSESSMENT') {
+                        label = 'Heads Assigned';
+                    } else if (status === 'EXECUTORS_ASSIGNED') {
+                        styles = 'bg-cyan-50 text-cyan-700 border border-cyan-100';
+                        label = 'Team Assigned';
+                    } else if (status === 'IN_ASSESSMENT') {
                         styles = 'bg-indigo-50 text-indigo-700 border border-indigo-100';
-                        label = 'Assessment';
-                    } else if (['SUBMITTED', 'SUBMITTED_FOR_REVIEW'].includes(status)) {
+                        label = 'In Progress';
+                    } else if (status === 'UNDER_REVIEW') {
                         styles = 'bg-amber-50 text-amber-700 border border-amber-200';
-                        label = 'Review Required';
+                        label = 'Under Review';
                     } else if (['APPROVED', 'ACCEPTED', 'WON', 'COMPLETED'].includes(status)) {
                         styles = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
                         label = 'Approved';
@@ -86,20 +91,57 @@ export const OpportunityRow: React.FC<OpportunityRowProps> = ({
                     );
                 })()}
             </td>
-            <td className="px-2 py-3">
-                <div className="flex items-center gap-1.5">
-                    {opp.assigned_sa ? (
-                        <>
-                            <div className="w-5 h-5 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
-                                <UserPlus size={10} className="text-[#0572CE]" />
-                            </div>
-                            <span className="text-[#0572CE] font-semibold">{opp.assigned_sa}</span>
-                        </>
-                    ) : (
-                        <span className="text-gray-300 italic">Unassigned</span>
-                    )}
-                </div>
-            </td>
+
+            {/* Dynamic Assignment Column */}
+            {role === 'PH' && (
+                <td className="px-2 py-3">
+                    <div className="flex items-center gap-1.5">
+                        {opp.assigned_sa ? (
+                            <>
+                                <div className="w-5 h-5 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
+                                    <UserPlus size={10} className="text-[#0572CE]" />
+                                </div>
+                                <span className="text-[#0572CE] font-semibold">{opp.assigned_sa}</span>
+                            </>
+                        ) : (
+                            <span className="text-gray-300 italic">Unassigned</span>
+                        )}
+                    </div>
+                </td>
+            )}
+
+            {role === 'SH' && (
+                <td className="px-2 py-3">
+                    <div className="flex items-center gap-1.5">
+                        {opp.assigned_sp ? (
+                            <>
+                                <div className="w-5 h-5 rounded-full bg-purple-50 flex items-center justify-center border border-purple-100">
+                                    <UserPlus size={10} className="text-purple-600" />
+                                </div>
+                                <span className="text-purple-600 font-semibold">{opp.assigned_sp}</span>
+                            </>
+                        ) : (
+                            <span className="text-gray-300 italic">Unassigned</span>
+                        )}
+                    </div>
+                </td>
+            )}
+
+            {role === 'GH' && (
+                <td className="px-2 py-3">
+                    <div className="flex flex-col gap-1 text-[10px]">
+                        <div className="flex items-center gap-1">
+                            <span className="text-gray-500 w-4">PH:</span>
+                            <span className="font-medium">{opp.assigned_practice_head || '-'}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <span className="text-gray-500 w-4">SH:</span>
+                            <span className="font-medium">{opp.assigned_sales_head || '-'}</span>
+                        </div>
+                    </div>
+                </td>
+            )}
+
             <td className="px-2 py-3 text-[#666666]">
                 {opp.stage_entered_at ? new Date(opp.stage_entered_at).toLocaleDateString() : '-'}
             </td>
@@ -123,27 +165,41 @@ export const OpportunityRow: React.FC<OpportunityRowProps> = ({
                 {opp.geo || opp.region || '-'}
             </td>
             <td className="px-2 py-3 text-right whitespace-nowrap">
-                {/* Review Actions */}
-                {(opp.workflow_status === 'SUBMITTED_FOR_REVIEW' || opp.workflow_status === 'SUBMITTED') && (
+                {/* Review Actions - Only show if in Review state and approval pending for this role */}
+                {opp.workflow_status === 'UNDER_REVIEW' && (
                     <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
-                        <button
-                            onClick={() => onApprove(opp.id)}
-                            className="px-2 py-1 text-[11px] font-bold bg-[#E8F5E9] text-[#2E7D32] border border-[#C8E6C9] rounded hover:bg-[#C8E6C9] transition-colors flex items-center gap-1"
-                        >
-                            <CheckCircle size={12} /> Accept
-                        </button>
-                        <button
-                            onClick={() => onReject(opp.id)}
-                            className="px-2 py-1 text-[11px] font-bold bg-[#FFEBEE] text-[#C62828] border border-[#FFCDD2] rounded hover:bg-[#FFCDD2] transition-colors flex items-center gap-1"
-                        >
-                            <XCircle size={12} /> Reject
-                        </button>
+                        {/* GH Action */}
+                        {role === 'GH' && opp.gh_approval_status === 'PENDING' && (
+                            <ActionButtons onApprove={() => onApprove(opp.id)} onReject={() => onReject(opp.id)} />
+                        )}
+                        {/* PH Action */}
+                        {role === 'PH' && opp.ph_approval_status === 'PENDING' && (
+                            <ActionButtons onApprove={() => onApprove(opp.id)} onReject={() => onReject(opp.id)} />
+                        )}
+                        {/* SH Action */}
+                        {role === 'SH' && opp.sh_approval_status === 'PENDING' && (
+                            <ActionButtons onApprove={() => onApprove(opp.id)} onReject={() => onReject(opp.id)} />
+                        )}
                     </div>
                 )}
 
-                {/* Action Buttons: Unified Review & View */}
-                <div className="flex flex-col gap-1 items-end" onClick={e => e.stopPropagation()}>
-                    <div className="flex gap-2 mb-1">
+                {/* Assignment & View Actions */}
+                <div className="flex flex-col gap-1 items-end mt-1" onClick={e => e.stopPropagation()}>
+                    <div className="flex gap-2">
+                        {/* Show Assign button only if assignment is missing for this role */}
+                        {role === 'PH' && !opp.assigned_sa && (
+                            <AssignButton onClick={() => onAssign(opp, 'SA')} label="Assign SA" />
+                        )}
+                        {role === 'SH' && !opp.assigned_sp && (
+                            <AssignButton onClick={() => onAssign(opp, 'SP')} label="Assign SP" />
+                        )}
+                        {role === 'GH' && (
+                            <>
+                                {!opp.assigned_practice_head && <AssignButton onClick={() => onAssign(opp, 'PH')} label="Assign PH" />}
+                                {!opp.assigned_sales_head && <AssignButton onClick={() => onAssign(opp, 'SH')} label="Assign SH" />}
+                            </>
+                        )}
+
                         {opp.version_no !== null && (
                             <button
                                 onClick={() => onView(opp.id, true)}
@@ -164,3 +220,20 @@ export const OpportunityRow: React.FC<OpportunityRowProps> = ({
         </tr>
     );
 };
+
+const ActionButtons = ({ onApprove, onReject }: { onApprove: () => void, onReject: () => void }) => (
+    <>
+        <button onClick={onApprove} className="px-2 py-1 text-[11px] font-bold bg-[#E8F5E9] text-[#2E7D32] border border-[#C8E6C9] rounded hover:bg-[#C8E6C9] transition-colors flex items-center gap-1">
+            <CheckCircle size={12} /> Accept
+        </button>
+        <button onClick={onReject} className="px-2 py-1 text-[11px] font-bold bg-[#FFEBEE] text-[#C62828] border border-[#FFCDD2] rounded hover:bg-[#FFCDD2] transition-colors flex items-center gap-1">
+            <XCircle size={12} /> Reject
+        </button>
+    </>
+);
+
+const AssignButton = ({ onClick, label }: { onClick: () => void, label: string }) => (
+    <button onClick={onClick} className="text-[10px] font-bold text-[#0572CE] hover:text-[#005a9e] uppercase border border-[#0572CE] px-1.5 py-0.5 rounded transition-colors flex items-center gap-1">
+        <UserPlus size={10} /> {label}
+    </button>
+);

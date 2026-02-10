@@ -6,13 +6,14 @@ import { RefreshCw } from 'lucide-react';
 interface OpportunitiesTableProps {
     opportunities: Opportunity[];
     loading: boolean;
-    onAssign: (opp: Opportunity) => void;
+    onAssign: (opp: Opportunity, type?: 'PH' | 'SH' | 'SA' | 'SP') => void;
     onApprove: (id: string) => void;
     onReject: (id: string) => void;
     onView: (id: string, jumpToScore?: boolean) => void;
     formatCurrency: (val: number) => string;
     selectedIds: string[];
     onSelectionChange: (ids: string[]) => void;
+    role?: 'GH' | 'PH' | 'SH' | 'SA' | 'SP';
 }
 
 export const OpportunitiesTable: React.FC<OpportunitiesTableProps> = ({
@@ -24,7 +25,8 @@ export const OpportunitiesTable: React.FC<OpportunitiesTableProps> = ({
     onView,
     formatCurrency,
     selectedIds,
-    onSelectionChange
+    onSelectionChange,
+    role = 'GH'
 }) => {
     // Select All Logic
     const handleSelectAll = (checked: boolean) => {
@@ -66,7 +68,12 @@ export const OpportunitiesTable: React.FC<OpportunitiesTableProps> = ({
                         <th className="px-2 py-4 text-left text-xs font-semibold text-[#4B5563] uppercase tracking-wider">Owner</th>
                         <th className="px-2 py-4 text-left text-xs font-semibold text-[#4B5563] uppercase tracking-wider">Practice</th>
                         <th className="px-2 py-4 text-left text-xs font-semibold text-[#4B5563] uppercase tracking-wider">Status</th>
-                        <th className="px-2 py-4 text-left text-xs font-semibold text-[#4B5563] uppercase tracking-wider text-[#0572CE]">Assigned Architect</th>
+
+                        {/* Dynamic Assignment Column based on Role */}
+                        {role === 'PH' && <th className="px-2 py-4 text-left text-xs font-semibold text-[#4B5563] uppercase tracking-wider text-[#0572CE]">Assigned Architect</th>}
+                        {role === 'SH' && <th className="px-2 py-4 text-left text-xs font-semibold text-[#4B5563] uppercase tracking-wider text-[#0572CE]">Assigned Sales Rep</th>}
+                        {role === 'GH' && <th className="px-2 py-4 text-left text-xs font-semibold text-[#4B5563] uppercase tracking-wider text-[#0572CE]">Assignments</th>}
+
                         <th className="px-2 py-4 text-left text-xs font-semibold text-[#4B5563] uppercase tracking-wider">Creation Date</th>
                         <th className="px-2 py-4 text-left text-xs font-semibold text-[#4B5563] uppercase tracking-wider">Account</th>
                         <th className="px-2 py-4 text-left text-xs font-semibold text-[#4B5563] uppercase tracking-wider">Account Owner</th>
@@ -99,6 +106,7 @@ export const OpportunitiesTable: React.FC<OpportunitiesTableProps> = ({
                                 formatCurrency={formatCurrency}
                                 selected={selectedIds.includes(opp.id)}
                                 onSelect={handleSelectRow}
+                                role={role}
                             />
                         ))
                     )}

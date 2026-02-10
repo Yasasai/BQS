@@ -10,7 +10,6 @@ import { Pagination } from '../components/Pagination';
 import { ManageUsersModal } from '../components/ManageUsersModal';
 import { ApprovalModal } from '../components/ApprovalModal';
 
-
 type TabType = 'action-required' | 'in-progress' | 'review' | 'completed';
 
 const TAB_LABELS: Record<string, string> = {
@@ -20,7 +19,7 @@ const TAB_LABELS: Record<string, string> = {
     'completed': 'Completed'
 };
 
-export function PracticeHeadDashboard() {
+export function SalesHeadDashboard() {
     const navigate = useNavigate();
     const { user } = useAuth();
     const location = useLocation();
@@ -39,24 +38,18 @@ export function PracticeHeadDashboard() {
     const [debouncedSearch, setDebouncedSearch] = useState('');
 
     const [activeTab, setActiveTab] = useState<TabType>('action-required');
-    const [viewMode, setViewMode] = useState('All Opportunities');
 
     // Modal state
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [isUserModalOpen, setIsUserModalOpen] = useState(false);
     const [selectedOppId, setSelectedOppId] = useState<string[]>([]);
 
-    // Action menu state
-    const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
-
     // Role-based Access Control
     useEffect(() => {
-        if (user?.role === 'SOLUTION_ARCHITECT') {
-            navigate('/assigned-to-me');
-        } else if (user?.role === 'GH' || user?.role === 'SH') {
-            // SH has their own dashboard now
-            if (user?.role === 'SH') navigate('/sales/dashboard');
-            else navigate('/management/dashboard');
+        if (user?.role !== 'SH' && user?.role !== 'GH') {
+            // Redirect if not SH (admin GH can view too ideally, but for now stick to role)
+            if (user?.role === 'PH') navigate('/practice-head/dashboard');
+            if (user?.role === 'SA') navigate('/assigned-to-me');
         }
     }, [user, navigate]);
 
@@ -104,7 +97,6 @@ export function PracticeHeadDashboard() {
                 return res.json();
             })
             .then(data => {
-                console.log('✅ Received data:', data);
                 if (data.items) {
                     setOpportunities(data.items);
                     setTotalCount(data.total_count);
@@ -126,7 +118,7 @@ export function PracticeHeadDashboard() {
     // --- filtering for Display ---
     const filteredOpportunities = opportunities;
 
-    const handleAssignToSA = async (oppIds: string | string[], primarySA: string, secondarySA?: string) => {
+    const handleAssignToSP = async (oppIds: string | string[], primarySP: string, secondarySP?: string) => {
         const idsToAssign = Array.isArray(oppIds) ? oppIds : [oppIds];
         try {
             await Promise.all(idsToAssign.map(id =>
@@ -134,9 +126,9 @@ export function PracticeHeadDashboard() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        role: 'SA',
-                        user_id: primarySA, // This is the user ID now (assigned from modal)
-                        assigned_by: user?.id || 'PRACTICE_HEAD'
+                        role: 'SP',
+                        user_id: primarySP,
+                        assigned_by: user?.id || 'SALES_HEAD'
                     })
                 })
             ));
@@ -170,7 +162,7 @@ export function PracticeHeadDashboard() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        role: 'PH',
+                        role: 'SH',
                         decision: approvalAction,
                         user_id: user?.id,
                         comment: comment
@@ -178,7 +170,7 @@ export function PracticeHeadDashboard() {
                 })
             ));
             fetchOpportunities();
-            setSelectedOppId([]); // Clear selection
+            setSelectedOppId([]);
             setIsApprovalModalOpen(false);
         } catch (error) {
             console.error(error);
@@ -190,19 +182,13 @@ export function PracticeHeadDashboard() {
 
     return (
         <div className="min-h-screen bg-white flex flex-col font-sans text-gray-900 overflow-x-hidden">
-            <TopBar title="Practice Head Dashboard" />
+            <TopBar title="Sales Head Dashboard" />
             <div className="flex-1 px-4 py-4 w-full max-w-[1600px] mx-auto">
                 <div className="flex justify-between items-center mb-6">
                     <div className="flex items-center gap-2">
                         <h1 className="text-xl font-normal text-[#333333]">Opportunities</h1>
                         <div className="w-5 h-5 rounded-full border border-gray-400 flex items-center justify-center text-[10px] text-gray-500 cursor-help">?</div>
                     </div>
-                    <button
-                        onClick={() => setIsUserModalOpen(true)}
-                        className="flex items-center gap-2 px-3 py-1.5 text-[13px] font-normal text-[#333333] border border-gray-300 rounded bg-white hover:bg-gray-50"
-                    >
-                        <Users size={14} /> Manage Users
-                    </button>
                 </div>
 
 
@@ -212,7 +198,7 @@ export function PracticeHeadDashboard() {
                         .map((tabId) => (
                             <button
                                 key={tabId}
-                                onClick={() => navigate(`/practice-head/${tabId}`)}
+                                onClick={() => navigate(`/sales/${tabId}`)}
                                 className={`pb-3 text-sm font-medium transition-all relative ${activeTab === tabId
                                     ? 'text-[#0572CE]'
                                     : 'text-[#666666] hover:text-[#333333]'
@@ -245,7 +231,7 @@ export function PracticeHeadDashboard() {
                                     className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded hover:bg-blue-700 shadow-sm transition-all"
                                 >
                                     <UserPlus size={16} />
-                                    Assign to Solution Architect
+                                    Assign to Sales Person
                                 </button>
                                 {(() => {
                                     const selectedItems = opportunities.filter(o => selectedOppId.includes(o.id));
@@ -256,14 +242,14 @@ export function PracticeHeadDashboard() {
                                     return canReview && (
                                         <>
                                             <button
-                                                onClick={() => handleApprove(selectedOppId)}
+                                                onClick={() => openApprovalModal(selectedOppId, 'APPROVE')}
                                                 className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-green-600 rounded hover:bg-green-700 shadow-sm transition-all"
                                             >
                                                 <CheckCircle size={16} />
                                                 Approve Selected
                                             </button>
                                             <button
-                                                onClick={() => handleReject(selectedOppId)}
+                                                onClick={() => openApprovalModal(selectedOppId, 'REJECT')}
                                                 className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-red-600 rounded hover:bg-red-700 shadow-sm transition-all"
                                             >
                                                 <XCircle size={16} />
@@ -293,7 +279,6 @@ export function PracticeHeadDashboard() {
                         <button onClick={() => fetchOpportunities()} className="flex items-center gap-2 px-4 py-1.5 text-[13px] font-normal text-[#333333] bg-white border border-gray-300 rounded hover:bg-gray-50">
                             <RefreshCw size={14} /> Refresh
                         </button>
-                        <button className="px-4 py-1.5 text-[13px] font-normal text-white bg-[#0572CE] rounded hover:bg-[#005a9e]">Create Opportunity</button>
                     </div>
                 </div>
 
@@ -318,7 +303,7 @@ export function PracticeHeadDashboard() {
                     formatCurrency={formatCurrency}
                     selectedIds={selectedOppId}
                     onSelectionChange={setSelectedOppId}
-                    role="PH"
+                    role="SH"
                 />
 
                 <div className="mt-[-48px] relative z-10">
@@ -335,7 +320,9 @@ export function PracticeHeadDashboard() {
                 isOpen={isAssignModalOpen}
                 onClose={() => setIsAssignModalOpen(false)}
                 opportunityIds={selectedOppId}
-                onAssign={(data: AssignmentData) => { handleAssignToSA(selectedOppId, data.sa_owner, data.secondary_sa); }}
+                targetRole="SP"
+                title="Assign Sales Representative"
+                onAssign={(data: AssignmentData) => { handleAssignToSP(selectedOppId, data.sa_owner, data.secondary_sa); }}
             />
 
             <ApprovalModal
@@ -344,8 +331,6 @@ export function PracticeHeadDashboard() {
                 onConfirm={handleModalConfirm}
                 type={approvalAction || 'APPROVE'}
             />
-
-            <ManageUsersModal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} />
         </div>
     );
 }

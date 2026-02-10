@@ -27,6 +27,18 @@ class OpportunityResponse(BaseModel):
     win_probability: Optional[float] = 0
     version_no: Optional[int] = None
     row_id: Optional[str] = None # Unique ID for table row (e.g. oppid_vX)
+    
+    # New Multi-Stage Fields
+    gh_approval_status: Optional[str] = 'PENDING'
+    ph_approval_status: Optional[str] = 'PENDING'
+    sh_approval_status: Optional[str] = 'PENDING'
+    assigned_practice_head_id: Optional[str] = None
+    assigned_sales_head_id: Optional[str] = None
+    assigned_practice_head: Optional[str] = None
+    assigned_sales_head: Optional[str] = None
+    assigned_sa: Optional[str] = None
+    assigned_sp: Optional[str] = None
+    combined_submission_ready: Optional[bool] = False
 
 
 class PaginatedOpportunityResponse(BaseModel):
@@ -42,14 +54,23 @@ def get_all_opportunities(
     page: int = 1,
     limit: int = 50,
     search: Optional[str] = None,
-    tab: Optional[str] = None
+    tab: Optional[str] = None,
+    user_id: Optional[str] = None,
+    role: Optional[str] = None
 ):
     # Calculate skip
     skip = (page - 1) * limit
 
     # Build Query
-    query = db.query(Opportunity).filter(Opportunity.is_active == True)
+    query = db.query(Opportunity).filter(Opportunity.is_active == True).order_by(desc(Opportunity.crm_last_updated_at))
 
+    # --- Role-Based Filtering ---
+    if role == 'PH' and user_id:
+        query = query.filter(Opportunity.assigned_practice_head_id == user_id)
+    elif role == 'SH' and user_id:
+        query = query.filter(Opportunity.assigned_sales_head_id == user_id)
+    # GH sees everything if they ask for 'all', but primarily focused on assignments
+    
     if search:
         search_term = f"%{search}%"
         query = query.filter(
@@ -60,25 +81,97 @@ def get_all_opportunities(
 
     from sqlalchemy import or_
 
-    # Consolidated Tab Filtering (User Requested Buckets)
-    if tab == 'unassigned':
-        # All items that need assignment (New/Open/NULL)
-        query = query.filter(
-            or_(
-                Opportunity.workflow_status.in_(['NEW', 'OPEN', '']),
-                Opportunity.workflow_status.is_(None)
+    # --- Role-Based Filtering Logic ---
+    
+    # 1. Base Filter: Filter by Role & User ID (except for GH/Admin)
+    if role == 'PH' and user_id:
+        query = query.filter(Opportunity.assigned_practice_head_id == user_id)
+    elif role == 'SH' and user_id:
+        query = query.filter(Opportunity.assigned_sales_head_id == user_id)
+    elif role == 'SA' and user_id:
+        query = query.filter(Opportunity.assigned_sa_id == user_id)
+    elif role == 'SP' and user_id:
+        query = query.filter(Opportunity.assigned_sp_id == user_id)
+    # GH gets to see everything by default
+    
+    # 2. Tab-Based Filtering
+    if role == 'GH':
+        if tab == 'unassigned':
+            query = query.filter(or_(Opportunity.workflow_status.in_(['NEW', 'OPEN', '']), Opportunity.workflow_status.is_(None)))
+        elif tab == 'pending-review':
+            query = query.filter(Opportunity.workflow_status == 'UNDER_REVIEW')
+        elif tab == 'completed':
+            query = query.filter(Opportunity.workflow_status.in_(['APPROVED', 'REJECTED', 'ACCEPTED', 'COMPLETED', 'WON', 'LOST']))
+    
+    elif role == 'PH':
+        if tab == 'action-required':
+            # Needs to assign SA
+            # Logic: I am assigned as PH, but SA is NOT assigned.
+            # We remove strict workflow_status check ("HEADS_ASSIGNED") to allow independent flow.
+            query = query.filter(
+                Opportunity.assigned_sa_id.is_(None),
+                Opportunity.workflow_status.in_(['NEW', 'OPEN', 'HEADS_ASSIGNED', 'PH_ASSIGNED', 'SH_ASSIGNED', None, ''])
             )
-        )
-    elif tab == 'assigned':
-        # Work Pipeline - Items already assigned or being worked on
-        query = query.filter(Opportunity.workflow_status.in_(['ASSIGNED_TO_SA', 'UNDER_ASSESSMENT']))
-    elif tab == 'review':
-        # Review Pipeline - Items submitted by SAs
-        query = query.filter(Opportunity.workflow_status.in_(['SUBMITTED_FOR_REVIEW', 'SUBMITTED']))
-    elif tab == 'completed':
-        # Completed - Approved and Rejected items
-        query = query.filter(Opportunity.workflow_status.in_(['APPROVED', 'REJECTED', 'ACCEPTED', 'COMPLETED', 'WON', 'LOST']))
-    # Note: 'all' or no tab returns everything unfiltered.
+        elif tab == 'in-progress':
+            query = query.filter(Opportunity.workflow_status.in_(['IN_ASSESSMENT', 'EXECUTORS_ASSIGNED', 'UNDER_ASSESSMENT']))
+        elif tab == 'review':
+            # Needs to review assessment
+            # Logic: Combined submission ready OR at least one submission? 
+            # User requirement: "Combined version of both assessments need to go to..."
+            # So review trigger is usually combined_submission_ready
+            query = query.filter(
+                or_(
+                    Opportunity.workflow_status == 'READY_FOR_REVIEW',
+                    Opportunity.workflow_status == 'UNDER_REVIEW'
+                ),
+                Opportunity.ph_approval_status == 'PENDING'
+            )
+        elif tab == 'completed':
+             query = query.filter(Opportunity.ph_approval_status.in_(['APPROVED', 'REJECTED']))
+
+    elif role == 'SH':
+        if tab == 'action-required':
+            # Needs to assign SP
+            query = query.filter(
+                Opportunity.assigned_sp_id.is_(None),
+                Opportunity.workflow_status.in_(['NEW', 'OPEN', 'HEADS_ASSIGNED', 'PH_ASSIGNED', 'SH_ASSIGNED', None, ''])
+            )
+        elif tab == 'in-progress':
+             query = query.filter(Opportunity.workflow_status.in_(['IN_ASSESSMENT', 'EXECUTORS_ASSIGNED', 'UNDER_ASSESSMENT']))
+        elif tab == 'review':
+             # Needs to review assessment
+            query = query.filter(
+                or_(
+                    Opportunity.workflow_status == 'READY_FOR_REVIEW',
+                    Opportunity.workflow_status == 'UNDER_REVIEW'
+                ),
+                Opportunity.sh_approval_status == 'PENDING'
+            )
+        elif tab == 'completed':
+             query = query.filter(Opportunity.sh_approval_status.in_(['APPROVED', 'REJECTED']))
+
+    elif role in ['SA', 'SP']:
+        if tab == 'assigned':
+            query = query.filter(Opportunity.workflow_status == 'EXECUTORS_ASSIGNED')
+        elif tab == 'in-progress':
+            query = query.filter(Opportunity.workflow_status == 'IN_ASSESSMENT')
+        elif tab == 'submitted':
+            query = query.filter(Opportunity.workflow_status == 'UNDER_REVIEW')
+        elif tab == 'completed':
+             query = query.filter(Opportunity.workflow_status.in_(['APPROVED', 'REJECTED']))
+    
+    # Fallback for legacy calls or specific tabs not covered above
+    if not role or role not in ['GH', 'PH', 'SH', 'SA', 'SP']:
+        if tab == 'unassigned':
+            query = query.filter(or_(Opportunity.workflow_status.in_(['NEW', 'OPEN', '']), Opportunity.workflow_status.is_(None)))
+        elif tab == 'assigned':
+             query = query.filter(Opportunity.workflow_status.in_(['ASSIGNED_TO_SA', 'UNDER_ASSESSMENT', 'HEADS_ASSIGNED', 'EXECUTORS_ASSIGNED', 'IN_ASSESSMENT']))
+        elif tab == 'review':
+             query = query.filter(Opportunity.workflow_status.in_(['SUBMITTED_FOR_REVIEW', 'SUBMITTED', 'UNDER_REVIEW']))
+        elif tab == 'completed':
+            query = query.filter(Opportunity.workflow_status.in_(['APPROVED', 'REJECTED', 'ACCEPTED', 'COMPLETED', 'WON', 'LOST']))
+
+    # Note: 'all' or no tab returns everything unfiltered (subject to role-base base filter).
 
     # Get Metrics Across Full Filtered Query (Before Pagination)
     from sqlalchemy import func
@@ -90,33 +183,107 @@ def get_all_opportunities(
     
     pipeline_value = metrics.total_val if metrics and metrics.total_val else 0
     
-    # Calculate counts for all tabs to show in sidebar/tabs
-    from sqlalchemy import or_
-    total_all = db.query(Opportunity).filter(Opportunity.is_active == True).count()
-    count_unassigned = db.query(Opportunity).filter(
-        Opportunity.is_active == True,
-        or_(Opportunity.workflow_status.in_(['NEW', 'OPEN', '']), Opportunity.workflow_status.is_(None))
-    ).count()
-    count_assigned = db.query(Opportunity).filter(
-        Opportunity.is_active == True,
-        Opportunity.workflow_status.in_(['ASSIGNED_TO_SA', 'UNDER_ASSESSMENT'])
-    ).count()
-    count_review = db.query(Opportunity).filter(
-        Opportunity.is_active == True,
-        Opportunity.workflow_status.in_(['SUBMITTED_FOR_REVIEW', 'SUBMITTED'])
-    ).count()
-    count_completed = db.query(OppScoreVersion).join(Opportunity).filter(
-        Opportunity.is_active == True,
-        OppScoreVersion.status.in_(['APPROVED', 'REJECTED', 'ACCEPTED', 'COMPLETED', 'WON', 'LOST'])
-    ).count()
+    
+    # --- Role-Based Tab Counts ---
+    tab_counts = {}
 
-    tab_counts = {
-        "all": total_all,
-        "unassigned": count_unassigned,
-        "assigned": count_assigned,
-        "review": count_review,
-        "completed": count_completed
-    }
+    if role == 'GH':
+        total_all = db.query(Opportunity).filter(Opportunity.is_active == True).count()
+        count_unassigned = db.query(Opportunity).filter(
+            Opportunity.is_active == True,
+            or_(Opportunity.workflow_status.in_(['NEW', 'OPEN', '']), Opportunity.workflow_status.is_(None))
+        ).count()
+        count_review = db.query(Opportunity).filter(
+            Opportunity.is_active == True,
+            Opportunity.workflow_status == 'UNDER_REVIEW'
+        ).count()
+        count_completed = db.query(Opportunity).filter(
+            Opportunity.is_active == True,
+            Opportunity.workflow_status.in_(['APPROVED', 'REJECTED', 'ACCEPTED', 'COMPLETED', 'WON', 'LOST'])
+        ).count()
+
+        tab_counts = {
+            "all": total_all,
+            "unassigned": count_unassigned,
+            "pending-review": count_review, 
+            "review": count_review, # Alias for frontend compatibility
+            "completed": count_completed
+        }
+
+    elif role == 'PH' and user_id:
+        base_query = db.query(Opportunity).filter(
+            Opportunity.is_active == True, 
+            Opportunity.assigned_practice_head_id == user_id
+        )
+        
+        count_action = base_query.filter(
+            Opportunity.workflow_status.in_(['HEADS_ASSIGNED', 'EXECUTORS_ASSIGNED']),
+            Opportunity.assigned_sa_id.is_(None)
+        ).count()
+        
+        count_in_progress = base_query.filter(Opportunity.workflow_status == 'IN_ASSESSMENT').count()
+        
+        count_review = base_query.filter(
+            Opportunity.workflow_status == 'UNDER_REVIEW',
+            Opportunity.ph_approval_status == 'PENDING'
+        ).count()
+        
+        count_completed = base_query.filter(Opportunity.ph_approval_status.in_(['APPROVED', 'REJECTED'])).count()
+        
+        tab_counts = {
+            "action-required": count_action,
+            "in-progress": count_in_progress,
+            "review": count_review,
+            "completed": count_completed
+        }
+
+    elif role == 'SH' and user_id:
+        base_query = db.query(Opportunity).filter(
+            Opportunity.is_active == True, 
+            Opportunity.assigned_sales_head_id == user_id
+        )
+        
+        count_action = base_query.filter(
+            Opportunity.workflow_status.in_(['HEADS_ASSIGNED', 'EXECUTORS_ASSIGNED']),
+            Opportunity.assigned_sp_id.is_(None)
+        ).count()
+        
+        count_in_progress = base_query.filter(Opportunity.workflow_status == 'IN_ASSESSMENT').count()
+        
+        count_review = base_query.filter(
+            Opportunity.workflow_status == 'UNDER_REVIEW',
+            Opportunity.sh_approval_status == 'PENDING'
+        ).count()
+        
+        count_completed = base_query.filter(Opportunity.sh_approval_status.in_(['APPROVED', 'REJECTED'])).count()
+        
+        tab_counts = {
+            "action-required": count_action,
+            "in-progress": count_in_progress,
+            "review": count_review,
+            "completed": count_completed
+        }
+        
+    elif role in ['SA', 'SP'] and user_id:
+        # Determine correct ID column
+        id_col = Opportunity.assigned_sa_id if role == 'SA' else Opportunity.assigned_sp_id
+        
+        base_query = db.query(Opportunity).filter(
+            Opportunity.is_active == True, 
+            id_col == user_id
+        )
+        
+        count_assigned = base_query.filter(Opportunity.workflow_status == 'EXECUTORS_ASSIGNED').count()
+        count_in_progress = base_query.filter(Opportunity.workflow_status == 'IN_ASSESSMENT').count()
+        count_submitted = base_query.filter(Opportunity.workflow_status == 'UNDER_REVIEW').count()
+        count_completed = base_query.filter(Opportunity.workflow_status.in_(['APPROVED', 'REJECTED'])).count()
+        
+        tab_counts = {
+            "assigned": count_assigned,
+            "in-progress": count_in_progress,
+            "submitted": count_submitted,
+            "completed": count_completed
+        }
     
     # Apply Pagination
     print(f"🔍 Querying opportunities - Tab: {tab}, Page: {page}, Limit: {limit}, Search: {search}")
@@ -178,7 +345,13 @@ def get_all_opportunities(
                 "assigned_practice_head": "N/A",
                 "assigned_sa": assigned_sa_name,
                 "win_probability": v.overall_score or 0,
-                "version_no": v.version_no
+                "version_no": v.version_no,
+                "gh_approval_status": o.gh_approval_status or 'PENDING',
+                "ph_approval_status": o.ph_approval_status or 'PENDING',
+                "sh_approval_status": o.sh_approval_status or 'PENDING',
+                "assigned_practice_head_id": o.assigned_practice_head_id,
+                "assigned_sales_head_id": o.assigned_sales_head_id,
+                "combined_submission_ready": o.combined_submission_ready or False
             })
     else:
         # Standard Opportunity-based view
@@ -202,17 +375,17 @@ def get_all_opportunities(
                 owner = db.query(AppUser).filter(AppUser.user_id == o.sales_owner_user_id).first()
                 if owner: sales_owner_name = owner.display_name
 
-            # Check Assignment
-            active_assign = db.query(OpportunityAssignment).filter(
-                OpportunityAssignment.opp_id == o.opp_id,
-                OpportunityAssignment.status == 'ACTIVE'
-            ).first()
-            
-            assigned_sa_name = None
-            if active_assign:
-                sa_user = db.query(AppUser).filter(AppUser.user_id == active_assign.assigned_to_user_id).first()
-                if sa_user: assigned_sa_name = sa_user.display_name
-            
+            # Resolve Assigned Names from Model Fields
+            def get_user_name(uid):
+                if not uid: return None
+                u = db.query(AppUser).filter(AppUser.user_id == uid).first()
+                return u.display_name if u else None
+
+            ph_name = get_user_name(o.assigned_practice_head_id)
+            sh_name = get_user_name(o.assigned_sales_head_id)
+            sa_name = get_user_name(o.assigned_sa_id)
+            sp_name = get_user_name(o.assigned_sp_id)
+
             # Check Score
             latest_score = db.query(OppScoreVersion).filter(OppScoreVersion.opp_id == o.opp_id).order_by(desc(OppScoreVersion.version_no)).first()
             if latest_score:
@@ -243,10 +416,18 @@ def get_all_opportunities(
                 "geo": o.geo or "Global",
                 "close_date": c_date_str,
                 "sales_owner": sales_owner_name,
-                "assigned_practice_head": "N/A", 
-                "assigned_sa": assigned_sa_name,
+                "assigned_practice_head": ph_name, 
+                "assigned_sales_head": sh_name,
+                "assigned_sa": sa_name,
+                "assigned_sp": sp_name,
                 "win_probability": win_prob,
-                "version_no": version_no
+                "version_no": version_no,
+                "gh_approval_status": o.gh_approval_status or 'PENDING',
+                "ph_approval_status": o.ph_approval_status or 'PENDING',
+                "sh_approval_status": o.sh_approval_status or 'PENDING',
+                "assigned_practice_head_id": o.assigned_practice_head_id,
+                "assigned_sales_head_id": o.assigned_sales_head_id,
+                "combined_submission_ready": o.combined_submission_ready or False
             })
 
     return {
@@ -268,9 +449,6 @@ def start_assessment(opp_id: str, data: StartAssessmentInput, db: Session = Depe
         raise HTTPException(404, "Opportunity not found")
     
     # Only change status if it's currently ASSIGNED_TO_SA or NEW
-    # We want to keep UNDER_ASSESSMENT or SUBMITTED_FOR_REVIEW as is if they are already there
-    # But for a new version, the SA might click "Restore Session" or "Run Assessment"
-    # Actually, let's just mark it as UNDER_ASSESSMENT once they start.
     opp.workflow_status = "UNDER_ASSESSMENT"
     
     try:
@@ -280,3 +458,152 @@ def start_assessment(opp_id: str, data: StartAssessmentInput, db: Session = Depe
         raise HTTPException(500, f"Failed to start assessment: {e}")
         
     return {"status": "success", "message": "Assessment started"}
+
+# --- New Workflow Endpoints ---
+
+class AssignRequest(BaseModel):
+    role: str # PH, SH, SA, SP
+    user_id: str
+    assigned_by: str
+
+@router.post("/{opp_id}/assign")
+def assign_role(opp_id: str, req: AssignRequest, db: Session = Depends(get_db)):
+    """
+    Assign a role to an opportunity with proper state transitions.
+    
+    State Transitions:
+    - NEW → HEADS_ASSIGNED (when both PH and SH assigned)
+    - HEADS_ASSIGNED → EXECUTORS_ASSIGNED (when both SA and SP assigned)
+    - EXECUTORS_ASSIGNED → IN_ASSESSMENT (when SA or SP starts assessment)
+    """
+    opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
+    if not opp: 
+        raise HTTPException(404, "Opportunity not found")
+    
+    target_user = db.query(AppUser).filter(AppUser.user_id == req.user_id).first()
+    if not target_user: 
+        raise HTTPException(404, "Target user not found")
+    
+    # Store current state for logging
+    old_status = opp.workflow_status
+    
+    # Assign based on role
+    # Assign based on role
+    if req.role == 'PH':
+        opp.assigned_practice_head_id = req.user_id
+        if opp.workflow_status in ['NEW', 'OPEN', None, '']:
+            if opp.assigned_sales_head_id:
+                opp.workflow_status = 'HEADS_ASSIGNED'
+            else:
+                opp.workflow_status = 'PH_ASSIGNED'
+            
+    elif req.role == 'SH':
+        opp.assigned_sales_head_id = req.user_id
+        if opp.workflow_status in ['NEW', 'OPEN', None, '', 'PH_ASSIGNED']:
+            if opp.assigned_practice_head_id:
+                opp.workflow_status = 'HEADS_ASSIGNED'
+            else:
+                opp.workflow_status = 'SH_ASSIGNED'
+            
+    elif req.role == 'SA':
+        opp.assigned_sa_id = req.user_id
+        # If PH assigns SA, we can move forward even if SH hasn't assigned SP yet?
+        # User says: "assigned individually... but same version".
+        # Let's keep status as indicate progress.
+        if opp.workflow_status in ['HEADS_ASSIGNED', 'PH_ASSIGNED', 'SH_ASSIGNED']:
+             if opp.assigned_sp_id:
+                 opp.workflow_status = 'EXECUTORS_ASSIGNED'
+             else:
+                 # Partial assignment
+                 pass 
+            
+    elif req.role == 'SP':
+        opp.assigned_sp_id = req.user_id
+        if opp.workflow_status in ['HEADS_ASSIGNED', 'PH_ASSIGNED', 'SH_ASSIGNED']:
+             if opp.assigned_sa_id:
+                 opp.workflow_status = 'EXECUTORS_ASSIGNED'
+             else:
+                 # Partial
+                 pass
+    else:
+        raise HTTPException(400, f"Invalid role: {req.role}")
+    
+    db.commit()
+    db.refresh(opp)
+    
+    print(f"✅ Assignment: {req.role} → {target_user.display_name} | State: {old_status} → {opp.workflow_status}")
+    
+    return {
+        "status": "success", 
+        "message": f"Assigned {req.role} to {target_user.display_name}", 
+        "workflow_status": opp.workflow_status,
+        "previous_status": old_status
+    }
+
+class ApprovalRequest(BaseModel):
+    role: str # GH, PH, SH
+    decision: str # APPROVED, REJECTED
+    comment: Optional[str] = None
+    user_id: str
+
+@router.post("/{opp_id}/approve")
+def process_approval(opp_id: str, req: ApprovalRequest, db: Session = Depends(get_db)):
+    opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
+    if not opp: raise HTTPException(404, "Opportunity not found")
+    
+    # Update individual status
+    if req.role == 'GH':
+        opp.gh_approval_status = req.decision
+    elif req.role == 'PH':
+        opp.ph_approval_status = req.decision
+    elif req.role == 'SH':
+        opp.sh_approval_status = req.decision
+        
+    # Get latest score to determine logic path
+    latest_ver = db.query(OppScoreVersion).filter(OppScoreVersion.opp_id == opp_id).order_by(desc(OppScoreVersion.version_no)).first()
+    current_score = latest_ver.overall_score if latest_ver and latest_ver.overall_score else 0
+    
+    # Normalized score (0-100) to 0-5 scale
+    score_5 = (current_score / 100.0) * 5.0
+    
+    is_fast_track = (3.5 <= score_5 < 4.0)
+
+    # 1. REJECTION Logic (Any rejection kills it)
+    if req.decision == 'REJECTED':
+        opp.workflow_status = 'REJECTED'
+        if latest_ver: latest_ver.status = 'REJECTED'
+            
+    # 2. APPROVAL Logic
+    else:
+        if is_fast_track:
+            # Special Rule: Direct to GH. If GH approves, we consider it done.
+            # "Overview assessment score between 3.5 to 4 need to go directly to Geo-Head... notified to PH or SH"
+            if opp.gh_approval_status == 'APPROVED':
+                opp.workflow_status = 'APPROVED'
+                if latest_ver: latest_ver.status = 'APPROVED'
+                # Optionally set PH/SH to 'NOTIFIED' if pending?
+                if opp.ph_approval_status == 'PENDING': opp.ph_approval_status = 'NOTIFIED'
+                if opp.sh_approval_status == 'PENDING': opp.sh_approval_status = 'NOTIFIED'
+            else:
+                # If GH hasn't approved yet (rejection handled above), wait for GH.
+                # PH/SH approval status doesn't matter much here?
+                opp.workflow_status = 'PENDING_GH_APPROVAL'
+        else:
+            # Standard Rule: Combined approval
+            # Assuming all 3 must approve for now based on "Combined version... need to go to PH, GH, SH"
+            if (opp.gh_approval_status == 'APPROVED' and 
+                opp.ph_approval_status == 'APPROVED' and 
+                opp.sh_approval_status == 'APPROVED'):
+                opp.workflow_status = 'APPROVED'
+                if latest_ver: latest_ver.status = 'APPROVED'
+            else:
+                 opp.workflow_status = 'PENDING_FINAL_APPROVAL'
+
+    db.commit()
+    return {
+        "status": "success", 
+        "gh_status": opp.gh_approval_status,
+        "ph_status": opp.ph_approval_status,
+        "sh_status": opp.sh_approval_status,
+        "workflow_status": opp.workflow_status
+    }

@@ -48,7 +48,10 @@ export function TopBar() {
                 <nav className="flex items-center gap-6 ml-4">
                     {['PH', 'GH', 'SH'].includes(user?.role || '') && (
                         <button
-                            onClick={() => navigate('/')}
+                            onClick={() => {
+                                if (user?.role === 'GH' || user?.role === 'SH') navigate('/management/dashboard');
+                                else navigate('/');
+                            }}
                             className={`flex items-center gap-2 text-sm font-semibold transition-colors ${['PH', 'GH', 'SH'].includes(user?.role || '') ? 'text-[#2563EB]' : 'text-[#4B5563] hover:text-[#111827]'}`}
                         >
                             <Inbox size={16} />

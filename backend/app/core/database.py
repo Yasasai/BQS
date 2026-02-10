@@ -4,7 +4,7 @@ import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from backend.app.models import Base, Role, AppUser, UserRole, OppScoreSection, OppScoreVersion, OppScoreSectionValue, Opportunity, OpportunityAssignment, Practice, SyncRun, SyncMeta
+from backend.app.models import Base, Role, AppUser, UserRole, OppScoreSection, OppScoreVersion, OppScoreSectionValue, Opportunity, OpportunityAssignment, Practice, SyncRun, SyncMeta, OracleOpportunity
 
 # Database Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Abcd1234@127.0.0.1:5432/bqs")
@@ -19,7 +19,7 @@ def init_db():
             cur.execute("SELECT 1 FROM pg_catalog.pg_database WHERE datname = 'bqs'")
             if not cur.fetchone():
                 cur.execute("CREATE DATABASE bqs")
-                print("✅ Database 'bqs' created.")
+                print("Database 'bqs' created.")
         conn.close()
     except Exception as e:
         print(f"Startup DB Check: {e}")
@@ -40,34 +40,25 @@ def init_db():
         # Roles
         if not db.query(Role).first():
             db.add_all([
-                Role(role_id=1, role_code="SALES_LEAD", role_name="Sales Lead"),
-                Role(role_id=2, role_code="SA", role_name="Solution Architect")
+                Role(role_id=1, role_code="GH", role_name="Global Head"),
+                Role(role_id=2, role_code="PH", role_name="Practice Head"),
+                Role(role_id=3, role_code="SH", role_name="Sales Head"),
+                Role(role_id=4, role_code="SA", role_name="Solution Architect"),
+                Role(role_id=5, role_code="SP", role_name="Sales Person")
             ])
             db.flush()
 
-        # Users
-        if not db.query(AppUser).filter_by(email="kunal.lead@example.com").first():
-            kunal = AppUser(email="kunal.lead@example.com", display_name="Kunal (Lead)")
-            db.add(kunal)
-            db.flush()
-            db.add(UserRole(user_id=kunal.user_id, role_id=1))
-            
-        if not db.query(AppUser).filter_by(email="sa.demo@example.com").first():
-            sa = AppUser(email="sa.demo@example.com", display_name="Demo SA")
-            db.add(sa)
-            db.flush()
-            db.add(UserRole(user_id=sa.user_id, role_id=2))
-
-        # Sections - Force verify all 8 codes exist
+        # Sections - Synchronized with Frontend ScoreOpportunity.tsx
         required_sections = [
-            ("STRAT", "Strategic Fit/Why Inspira?", 1, 0.15),
+            ("STRAT", "Strategic Fit", 1, 0.15),
             ("WIN", "Win Probability", 2, 0.15),
-            ("COMP", "Competitive Position/Incumbent", 3, 0.15),
-            ("FIN", "Financial Value", 4, 0.15),
-            ("RES", "Resource Availability", 5, 0.10),
-            ("PAST", "Past Performance/References", 6, 0.10),
-            ("CUST", "Customer Relationship", 7, 0.10),
-            ("LEGAL", "Legal/Insurance/Bond Requirement", 8, 0.10)
+            ("FIN", "Financial Value", 3, 0.15),
+            ("COMP", "Competitive Position", 4, 0.10),
+            ("FEAS", "Delivery Feasibility", 5, 0.10),
+            ("CUST", "Customer Relationship", 6, 0.10),
+            ("RISK", "Risk Exposure", 7, 0.10),
+            ("PROD", "Product / Service Compliance", 8, 0.05),
+            ("LEGAL", "Legal & Commercial Readiness", 9, 0.10)
         ]
         
         for code, name, order, weight in required_sections:

@@ -5,8 +5,9 @@ from sqlalchemy import desc
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
+from sqlalchemy import func
 from backend.app.core.database import get_db
-from backend.app.models import OppScoreVersion, OppScoreSectionValue, OppScoreSection, Opportunity
+from backend.app.models import OppScoreVersion, OppScoreSectionValue, OppScoreSection, Opportunity, AppUser
 
 router = APIRouter(prefix="/api/scoring", tags=["scoring"])
 
@@ -25,8 +26,21 @@ class ScoreInput(BaseModel):
     attachment_name: Optional[str] = None
 
 @router.get("/{opp_id}/latest")
-def get_latest_score(opp_id: str, db: Session = Depends(get_db)):
-    latest = db.query(OppScoreVersion).filter(OppScoreVersion.opp_id == opp_id).order_by(desc(OppScoreVersion.version_no)).first()
+def get_latest_score(opp_id: str, user_id: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(OppScoreVersion).filter(OppScoreVersion.opp_id == opp_id)
+    
+    # If user_id is provided, try to find THEIR latest version first
+    if user_id:
+        user_version = query.filter(OppScoreVersion.created_by_user_id == user_id).order_by(desc(OppScoreVersion.version_no)).first()
+        if user_version:
+             latest = user_version
+        else:
+             # Fallback: if I haven't started, return NOT_STARTED
+             return {"status": "NOT_STARTED", "sections": []}
+    else:
+        # Fallback for generic view (e.g. manager viewing latest activity)
+        latest = query.order_by(desc(OppScoreVersion.version_no)).first()
+
     if not latest: return {"status": "NOT_STARTED", "sections": []}
     
     # LOGIC FIX: If an assessment is marked "SUBMITTED" but has no section values, 
@@ -62,7 +76,8 @@ def get_latest_score(opp_id: str, db: Session = Depends(get_db)):
     prev_assessment = None
     prev = db.query(OppScoreVersion).filter(
         OppScoreVersion.opp_id == opp_id, 
-        OppScoreVersion.version_no < latest.version_no
+        OppScoreVersion.version_no < latest.version_no,
+        OppScoreVersion.created_by_user_id == latest.created_by_user_id # Match the same user
     ).order_by(desc(OppScoreVersion.version_no)).first()
     
     if prev:
@@ -76,6 +91,33 @@ def get_latest_score(opp_id: str, db: Session = Depends(get_db)):
             "created_by": prev.created_by_user_id
         }
 
+    # GLOBAL STATUS CHECK:
+    # We need to know if SA/SP have submitted, regardless of which version we are looking at.
+    opp_obj = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
+    
+    global_sa_submitted = False
+    global_sp_submitted = False
+    
+    if opp_obj:
+        sa_id = opp_obj.assigned_sa_id
+        sp_id = opp_obj.assigned_sp_id
+        
+        if sa_id:
+            sa_ver = db.query(OppScoreVersion).filter(
+                OppScoreVersion.opp_id == opp_id,
+                OppScoreVersion.created_by_user_id == sa_id,
+                OppScoreVersion.status.in_(["SUBMITTED", "APPROVED", "REJECTED"])
+            ).first()
+            if sa_ver: global_sa_submitted = True
+            
+        if sp_id:
+            sp_ver = db.query(OppScoreVersion).filter(
+                OppScoreVersion.opp_id == opp_id,
+                OppScoreVersion.created_by_user_id == sp_id,
+                OppScoreVersion.status.in_(["SUBMITTED", "APPROVED", "REJECTED"])
+            ).first()
+            if sp_ver: global_sp_submitted = True
+
     return {
         "status": current_status,
         "version_no": latest.version_no,
@@ -84,49 +126,108 @@ def get_latest_score(opp_id: str, db: Session = Depends(get_db)):
         "recommendation": latest.recommendation,
         "summary_comment": latest.summary_comment,
         "attachment_name": latest.attachment_name,
+        "sa_submitted": global_sa_submitted,
+        "sp_submitted": global_sp_submitted,
         "sections": sections,
         "prev_assessment": prev_assessment
     }
 
 @router.post("/{opp_id}/draft")
 def save_draft(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
-    # 1. Find the latest version for this opportunity
-    last = db.query(OppScoreVersion).filter(OppScoreVersion.opp_id == opp_id).order_by(desc(OppScoreVersion.version_no)).first()
+    # 1. Find the latest version FOR THIS USER
+    last = db.query(OppScoreVersion).filter(
+        OppScoreVersion.opp_id == opp_id,
+        OppScoreVersion.created_by_user_id == data.user_id
+    ).order_by(desc(OppScoreVersion.version_no)).first()
     
-    # 2. Determine if we can reuse the latest version (if it's not finalized)
-    # Finalized statuses are SUBMITTED, APPROVED, REJECTED. 
-    # Active/Draft-like statuses are DRAFT, ASSIGNED_TO_SA, UNDER_ASSESSMENT.
-    active_statuses = ["DRAFT", "ASSIGNED_TO_SA", "UNDER_ASSESSMENT"]
-    if last and last.status in active_statuses:
-        draft = last
+    # 2. Reuse latest version if it's not fully finalized
+    # Fully finalized = APPROVED, REJECTED
+    # If I have a draft that is UNDER_ASSESSMENT vs SUBMITTED...
+    
+    # NEW LOGIC: Enforce Version Synchronization
+    # Find the global latest version number for this opportunity (across all users)
+    global_max_ver = db.query(func.max(OppScoreVersion.version_no)).filter(OppScoreVersion.opp_id == opp_id).scalar() or 0
+    
+    target_ver_no = global_max_ver
+    if target_ver_no == 0: target_ver_no = 1
+    
+    # Check the status of this global max version (is it a closed round?)
+    # If ANY record with this version is APPROVED/REJECTED -> It's a closed round, move to next.
+    is_closed_round = db.query(OppScoreVersion).filter(
+        OppScoreVersion.opp_id == opp_id,
+        OppScoreVersion.version_no == target_ver_no,
+        OppScoreVersion.status.in_(['APPROVED', 'REJECTED'])
+    ).first() is not None
+    
+    if is_closed_round:
+        target_ver_no += 1
+        
+    # Now look for MY record for this target_ver_no
+    my_ver = db.query(OppScoreVersion).filter(
+        OppScoreVersion.opp_id == opp_id,
+        OppScoreVersion.version_no == target_ver_no,
+        OppScoreVersion.created_by_user_id == data.user_id
+    ).first()
+    
+    if my_ver:
+        if my_ver.status in ['APPROVED', 'REJECTED']:
+            # Should not happen if we did the closed round check correctly, unless partial state?
+            # Or if I am trying to edit a closed record?
+            # Create next version?
+             target_ver_no += 1
+             draft = OppScoreVersion(
+                opp_id=opp_id, 
+                version_no=target_ver_no, 
+                status="UNDER_ASSESSMENT", 
+                created_by_user_id=data.user_id
+            )
+             db.add(draft)
+        elif my_ver.status == 'SUBMITTED':
+            # I already submitted this version. I can't save draft to it.
+            # Unless we support re-opening? For now, assume locked.
+             return {"status": "error", "message": "Version already submitted"}
+        else:
+            draft = my_ver
     else:
-        # Create a new version if none exists or latest is finalized
-        ver_no = (last.version_no + 1) if last else 1
+        # I don't have a record for this version yet (e.g. SA started v1, I am SP joining v1)
         draft = OppScoreVersion(
             opp_id=opp_id, 
-            version_no=ver_no, 
-            status="UNDER_ASSESSMENT", # Default to UNDER_ASSESSMENT upon saving
+            version_no=target_ver_no, 
+            status="UNDER_ASSESSMENT", 
             created_by_user_id=data.user_id
         )
         db.add(draft)
-        db.flush()
+        
+    db.flush()
     
     draft.confidence_level = data.confidence_level
     draft.recommendation = data.recommendation
     draft.summary_comment = data.summary_comment
-    draft.attachment_name = data.attachment_name # Save attachment filename
+    draft.attachment_name = data.attachment_name
     
-    valid_sections = {s.section_code for s in db.query(OppScoreSection).all()}
+    valid_sections = {s.section_code: s.section_code for s in db.query(OppScoreSection).all()}
+    # Support Mapping for frontend descriptive keys to backend codes
+    section_map = {
+        "strategic_fit": "STRAT",
+        "win_probability": "WIN",
+        "financial_value": "FIN",
+        "competitive_position": "COMP",
+        "delivery_feasibility": "FEAS",
+        "customer_relationship": "CUST",
+        "risk_exposure": "RISK",
+        "compliance": "PROD",
+        "legal_readiness": "LEGAL"
+    }
     
     saved_count = 0
     for s in data.sections:
-        if s.section_code not in valid_sections:
-            print(f"⚠️ Warning: Frontend sent section '{s.section_code}' which is NOT in the database. Valid codes: {valid_sections}")
+        code = section_map.get(s.section_code, s.section_code) # Map or use default
+        if code not in valid_sections:
             continue
 
         val = db.query(OppScoreSectionValue).filter(
             OppScoreSectionValue.score_version_id == draft.score_version_id, 
-            OppScoreSectionValue.section_code == s.section_code
+            OppScoreSectionValue.section_code == code
         ).first()
         
         if val:
@@ -136,79 +237,163 @@ def save_draft(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
         else:
             db.add(OppScoreSectionValue(
                 score_version_id=draft.score_version_id, 
-                section_code=s.section_code, 
+                section_code=code, 
                 score=s.score, 
                 notes=s.notes,
                 selected_reasons=s.selected_reasons 
             ))
         saved_count += 1
             
-    try:
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(500, f"Database Error during save: {e}")
-        
-    if saved_count == 0:
-        # Critical warning: no data actually saved
-        print(f"❌ Critical: Zero sections saved for {opp_id}. Frontend sent: {[s.section_code for s in data.sections]}")
-        
-    return {"status": "success", "saved_count": saved_count}
-
-
+    db.commit()
+    return {"status": "success", "saved_count": saved_count, "version_no": draft.version_no}
 
 @router.post("/{opp_id}/submit")
 def submit_score(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
-    # 1. Save data as draft first (this commits)
+    # 1. Save current changes
     save_draft(opp_id, data, db) 
     
-    # 2. Get the active version we just saved/updated
-    from sqlalchemy.orm import joinedload
-    active_statuses = ["DRAFT", "ASSIGNED_TO_SA", "UNDER_ASSESSMENT"]
+    # 2. Get active draft FOR THIS USER
     draft = db.query(OppScoreVersion).filter(
-        OppScoreVersion.opp_id == opp_id, 
-        OppScoreVersion.status.in_(active_statuses)
+        OppScoreVersion.opp_id == opp_id,
+        OppScoreVersion.created_by_user_id == data.user_id
     ).order_by(desc(OppScoreVersion.version_no)).first()
     
-    if not draft:
-        raise HTTPException(400, "Active assessment not found immediately after saving. Please try again.")
+    if not draft or draft.status in ["APPROVED", "REJECTED", "SUBMITTED"]:
+         # If already submitted, maybe asking to re-submit? For now allow re-submit if logic permits, 
+         # but normally save_draft would have created a new one if previous was submitted.
+         # If save_draft created a new one, status is UNDER_ASSESSMENT.
+         # If draft.status is SUBMITTED, means save_draft reused it? No, save_draft creates new if submitted.
+         # So we should be fine.
+         if not draft: raise HTTPException(400, "No active draft to submit")
     
-    # 3. Calculate Score using relationship
+    # 3. Determine Role and Update Flags
+    user = db.query(AppUser).filter(AppUser.user_id == data.user_id).first()
+    opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
+    
+    if not user or not opp: raise HTTPException(404, "Data mismatch")
+    
+    is_sa = (opp.assigned_sa_id == user.user_id)
+    is_sp = (opp.assigned_sp_id == user.user_id)
+    
+    # Update this specific version's flags (though mostly we care about the version status)
+    if is_sa: draft.sa_submitted = True
+    if is_sp: draft.sp_submitted = True
+    
+    # Calculate Weighted Score
     total_w, weighted_s = 0, 0
-    # Use joinedload to ensure 'section' is available for weights
+    from sqlalchemy.orm import joinedload
     vals = db.query(OppScoreSectionValue).options(joinedload(OppScoreSectionValue.section)).filter(
         OppScoreSectionValue.score_version_id == draft.score_version_id
     ).all()
     
-    if not vals:
-        raise HTTPException(400, "No section scores found. Cannot calculate final score.")
-
     for v in vals:
         if v.section:
             weighted_s += (v.score * v.section.weight)
             total_w += v.section.weight
-        else:
-            # Fallback if section definition is somehow missing
-            weighted_s += (v.score * 1.0)
-            total_w += 1.0
     
     max_s = total_w * 5
     draft.overall_score = int((weighted_s / max_s) * 100) if max_s > 0 else 0
+    
+    # Mark this version as Submitted
     draft.status = "SUBMITTED"
     draft.submitted_at = datetime.utcnow()
     
-    # Update Opportunity Workflow Status
-    opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
-    if opp:
-        opp.workflow_status = "SUBMITTED_FOR_REVIEW"
-    
-    try:
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(500, f"Failed to commit submission: {e}")
+    # 5. Check Global State - Has the OTHER role also submitted?
+    # Find latest submitted version for SA
+    sa_done = False
+    if is_sa: sa_done = True
+    else:
+        # Check if SA has a submitted version
+        sa_ver = db.query(OppScoreVersion).filter(
+            OppScoreVersion.opp_id == opp_id,
+            OppScoreVersion.created_by_user_id == opp.assigned_sa_id,
+            OppScoreVersion.status == "SUBMITTED"
+        ).first()
+        if sa_ver: sa_done = True
+
+    # Find latest submitted version for SP
+    sp_done = False
+    if is_sp: sp_done = True
+    else:
+         # Check if SP has a submitted version
+        sp_ver = db.query(OppScoreVersion).filter(
+            OppScoreVersion.opp_id == opp_id,
+            OppScoreVersion.created_by_user_id == opp.assigned_sp_id,
+            OppScoreVersion.status == "SUBMITTED"
+        ).first()
+        if sp_ver: sp_done = True
+
+    if sa_done and sp_done:
+        opp.workflow_status = "READY_FOR_REVIEW"
+        opp.combined_submission_ready = True
+    else:
+        if is_sa: opp.workflow_status = "SA_SUBMITTED"
+        if is_sp: opp.workflow_status = "SP_SUBMITTED"
         
-    return {"status": "success", "overall_score": draft.overall_score}
+    db.commit()
+    return {"status": "success", "overall_score": draft.overall_score, "workflow_status": opp.workflow_status}
+
+@router.get("/{opp_id}/combined-review")
+def get_combined_score(opp_id: str, version_no: Optional[int] = None, db: Session = Depends(get_db)):
+    """
+    Fetch both SA and SP assessments for a side-by-side review.
+    Fetches the latest SUBMITTED version for each role independently unless a specific version is requested (which is tricky with independent versioning).
+    for now, we prioritize the LATEST SUBMITTED state for review.
+    """
+    opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
+    if not opp: raise HTTPException(404, "Opportunity not found")
+    
+    # Find targets
+    sa_id = opp.assigned_sa_id
+    sp_id = opp.assigned_sp_id
+    
+    # Helper to fetch latest submitted version for a user
+    def fetch_latest_submitted(user_id):
+        if not user_id: return None
+        return db.query(OppScoreVersion).filter(
+            OppScoreVersion.opp_id == opp_id,
+            OppScoreVersion.created_by_user_id == user_id,
+            OppScoreVersion.status.in_(["SUBMITTED", "APPROVED", "REJECTED"])
+        ).order_by(desc(OppScoreVersion.version_no)).first()
+
+    sa_ver = fetch_latest_submitted(sa_id)
+    sp_ver = fetch_latest_submitted(sp_id)
+    
+    # If no submitted versions found, return empty structure (or check for active drafts if needed?)
+    # For review, we only care about submitted.
+    
+    # Helper to serialize
+    def serialize_ver(ver):
+        if not ver: return None
+        sections = []
+        for v in ver.section_values:
+            sections.append({
+                "section_code": v.section_code,
+                "score": v.score,
+                "notes": v.notes
+            })
+        return {
+            "version": ver.version_no,
+            "score": ver.overall_score,
+            "status": ver.status,
+            "sections": sections,
+            "confidence": ver.confidence_level,
+            "recommendation": ver.recommendation,
+            "created_by": ver.created_by_user_id
+        }
+
+    return {
+        "opp_id": opp_id,
+        "ready_for_review": opp.combined_submission_ready,
+        "sa_assessment": serialize_ver(sa_ver),
+        "sp_assessment": serialize_ver(sp_ver),
+        # Include Approvals
+        "approvals": {
+            "gh": opp.gh_approval_status,
+            "ph": opp.ph_approval_status,
+            "sh": opp.sh_approval_status
+        }
+    }
 
 
 @router.post("/{opp_id}/reopen")
