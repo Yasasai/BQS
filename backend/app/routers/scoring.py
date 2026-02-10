@@ -26,6 +26,7 @@ class ScoreInput(BaseModel):
     attachment_name: Optional[str] = None
 
 @router.get("/{opp_id}/latest")
+<<<<<<< HEAD
 def get_latest_score(
     opp_id: str, 
     user_id: Optional[str] = Query(None), 
@@ -43,6 +44,21 @@ def get_latest_score(
     elif user_id:
         latest = query.filter(OppScoreVersion.created_by_user_id == user_id).order_by(desc(OppScoreVersion.version_no)).first()
     else:
+=======
+def get_latest_score(opp_id: str, user_id: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(OppScoreVersion).filter(OppScoreVersion.opp_id == opp_id)
+    
+    # If user_id is provided, try to find THEIR latest version first
+    if user_id:
+        user_version = query.filter(OppScoreVersion.created_by_user_id == user_id).order_by(desc(OppScoreVersion.version_no)).first()
+        if user_version:
+             latest = user_version
+        else:
+             # Fallback: if I haven't started, return NOT_STARTED
+             return {"status": "NOT_STARTED", "sections": []}
+    else:
+        # Fallback for generic view (e.g. manager viewing latest activity)
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
         latest = query.order_by(desc(OppScoreVersion.version_no)).first()
 
     if not latest: return {"status": "NOT_STARTED", "sections": []}
@@ -186,11 +202,18 @@ def save_draft(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
                 created_by_user_id=data.user_id
             )
              db.add(draft)
+<<<<<<< HEAD
         elif my_ver.status == 'SUBMITTED' and opp.workflow_status not in ['APPROVED', 'REJECTED']:
             # Allow editing even if submitted, as long as no final decision is made.
             # This handles the "mistakenly created 2 versions" or "unable to submit" issue.
             draft = my_ver
             draft.status = 'UNDER_ASSESSMENT' # Revert to allowing edits
+=======
+        elif my_ver.status == 'SUBMITTED':
+            # I already submitted this version. I can't save draft to it.
+            # Unless we support re-opening? For now, assume locked.
+             return {"status": "error", "message": "Version already submitted"}
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
         else:
             draft = my_ver
     else:
@@ -263,6 +286,7 @@ def submit_score(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
         OppScoreVersion.created_by_user_id == data.user_id
     ).order_by(desc(OppScoreVersion.version_no)).first()
     
+<<<<<<< HEAD
     if not draft:
         raise HTTPException(400, "No active draft to submit")
     
@@ -273,6 +297,16 @@ def submit_score(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
     if opp.workflow_status in ['APPROVED', 'REJECTED']:
          raise HTTPException(400, "Opportunity is already finalized.")
     
+=======
+    if not draft or draft.status in ["APPROVED", "REJECTED", "SUBMITTED"]:
+         # If already submitted, maybe asking to re-submit? For now allow re-submit if logic permits, 
+         # but normally save_draft would have created a new one if previous was submitted.
+         # If save_draft created a new one, status is UNDER_ASSESSMENT.
+         # If draft.status is SUBMITTED, means save_draft reused it? No, save_draft creates new if submitted.
+         # So we should be fine.
+         if not draft: raise HTTPException(400, "No active draft to submit")
+    
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
     # 3. Determine Role and Update Flags
     user = db.query(AppUser).filter(AppUser.user_id == data.user_id).first()
     opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
@@ -305,6 +339,7 @@ def submit_score(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
     draft.status = "SUBMITTED"
     draft.submitted_at = datetime.utcnow()
     
+<<<<<<< HEAD
     # 5. Check Global State - Has everyone assigned submitted?
     
     # 5a. Handle SA status
@@ -359,14 +394,55 @@ def submit_score(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
         else:
             if is_sa: opp.workflow_status = "SA_SUBMITTED"
             if is_sp: opp.workflow_status = "SP_SUBMITTED"
+=======
+    # 5. Check Global State - Has the OTHER role also submitted?
+    # Find latest submitted version for SA
+    sa_done = False
+    if is_sa: sa_done = True
+    else:
+        # Check if SA has a submitted version
+        sa_ver = db.query(OppScoreVersion).filter(
+            OppScoreVersion.opp_id == opp_id,
+            OppScoreVersion.created_by_user_id == opp.assigned_sa_id,
+            OppScoreVersion.status == "SUBMITTED"
+        ).first()
+        if sa_ver: sa_done = True
+
+    # Find latest submitted version for SP
+    sp_done = False
+    if is_sp: sp_done = True
+    else:
+         # Check if SP has a submitted version
+        sp_ver = db.query(OppScoreVersion).filter(
+            OppScoreVersion.opp_id == opp_id,
+            OppScoreVersion.created_by_user_id == opp.assigned_sp_id,
+            OppScoreVersion.status == "SUBMITTED"
+        ).first()
+        if sp_ver: sp_done = True
+
+    if sa_done and sp_done:
+        opp.workflow_status = "READY_FOR_REVIEW"
+        opp.combined_submission_ready = True
+    else:
+        if is_sa: opp.workflow_status = "SA_SUBMITTED"
+        if is_sp: opp.workflow_status = "SP_SUBMITTED"
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
         
     db.commit()
     return {"status": "success", "overall_score": draft.overall_score, "workflow_status": opp.workflow_status}
 
 @router.get("/{opp_id}/combined-review")
+<<<<<<< HEAD
 def get_combined_score(opp_id: str, version_no: Optional[int] = Query(None), db: Session = Depends(get_db)):
     """
     Fetch both SA and SP assessments for a side-by-side review.
+=======
+def get_combined_score(opp_id: str, version_no: Optional[int] = None, db: Session = Depends(get_db)):
+    """
+    Fetch both SA and SP assessments for a side-by-side review.
+    Fetches the latest SUBMITTED version for each role independently unless a specific version is requested (which is tricky with independent versioning).
+    for now, we prioritize the LATEST SUBMITTED state for review.
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
     """
     opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
     if not opp: raise HTTPException(404, "Opportunity not found")
@@ -375,6 +451,7 @@ def get_combined_score(opp_id: str, version_no: Optional[int] = Query(None), db:
     sa_id = opp.assigned_sa_id
     sp_id = opp.assigned_sp_id
     
+<<<<<<< HEAD
     # Helper to fetch version for a user
     def fetch_ver(user_id):
         if not user_id: return None
@@ -389,6 +466,22 @@ def get_combined_score(opp_id: str, version_no: Optional[int] = Query(None), db:
 
     sa_ver = fetch_ver(sa_id)
     sp_ver = fetch_ver(sp_id)
+=======
+    # Helper to fetch latest submitted version for a user
+    def fetch_latest_submitted(user_id):
+        if not user_id: return None
+        return db.query(OppScoreVersion).filter(
+            OppScoreVersion.opp_id == opp_id,
+            OppScoreVersion.created_by_user_id == user_id,
+            OppScoreVersion.status.in_(["SUBMITTED", "APPROVED", "REJECTED"])
+        ).order_by(desc(OppScoreVersion.version_no)).first()
+
+    sa_ver = fetch_latest_submitted(sa_id)
+    sp_ver = fetch_latest_submitted(sp_id)
+    
+    # If no submitted versions found, return empty structure (or check for active drafts if needed?)
+    # For review, we only care about submitted.
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
     
     # Helper to serialize
     def serialize_ver(ver):
@@ -402,8 +495,12 @@ def get_combined_score(opp_id: str, version_no: Optional[int] = Query(None), db:
             })
         return {
             "version": ver.version_no,
+<<<<<<< HEAD
             "overall_score": ver.overall_score, # GUI expects 'score' or 'overall_score'?
             "score": ver.overall_score,         # Add both for safety
+=======
+            "score": ver.overall_score,
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
             "status": ver.status,
             "sections": sections,
             "confidence": ver.confidence_level,
@@ -414,8 +511,14 @@ def get_combined_score(opp_id: str, version_no: Optional[int] = Query(None), db:
     return {
         "opp_id": opp_id,
         "ready_for_review": opp.combined_submission_ready,
+<<<<<<< HEAD
         "sa_score": serialize_ver(sa_ver),
         "sp_score": serialize_ver(sp_ver),
+=======
+        "sa_assessment": serialize_ver(sa_ver),
+        "sp_assessment": serialize_ver(sp_ver),
+        # Include Approvals
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
         "approvals": {
             "gh": opp.gh_approval_status,
             "ph": opp.ph_approval_status,

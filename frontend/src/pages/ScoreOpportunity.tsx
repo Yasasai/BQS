@@ -72,6 +72,7 @@ export const ScoreOpportunity: React.FC = () => {
                     setDeadline(new Date(d.data.close_date).toISOString().split('T')[0]);
                 }
 
+<<<<<<< HEAD
                 // 2. Fetch Assessment Data
                 const isExecutor = user?.role === 'SA' || user?.role === 'SP';
                 const params = new URLSearchParams();
@@ -79,6 +80,14 @@ export const ScoreOpportunity: React.FC = () => {
                 if (forcedVersion) params.append('version', forcedVersion);
 
                 const s = await axios.get(`http://127.0.0.1:8000/api/scoring/${id}/latest?${params.toString()}`);
+=======
+                // 2. Fetch Latest Assessment Data
+                // If Executor (SA/SP), fetch *my* latest draft.
+                // If Approver, fetch the overall latest activity (no user_id filter).
+                const isExecutor = user?.role === 'SA' || user?.role === 'SP';
+                const queryParams = isExecutor ? `?user_id=${user?.id}` : '';
+                const s = await axios.get(`http://127.0.0.1:8000/api/scoring/${id}/latest${queryParams}`);
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
                 const currentStatus = s.data.status;
 
                 if (currentStatus !== "NOT_STARTED") {
@@ -107,6 +116,7 @@ export const ScoreOpportunity: React.FC = () => {
                     setSectionNotes(notesMap);
 
                     // 2b. If Ready for Review and User is Approver, Try Fetching Combined
+<<<<<<< HEAD
                     const isReady = ['SUBMITTED', 'READY_FOR_REVIEW', 'SA_SUBMITTED', 'SP_SUBMITTED', 'UNDER_REVIEW'].includes(s.data.status) ||
                         ['READY_FOR_REVIEW', 'SA_SUBMITTED', 'SP_SUBMITTED', 'UNDER_REVIEW'].includes(d.data.workflow_status) ||
                         d.data.combined_submission_ready;
@@ -114,6 +124,11 @@ export const ScoreOpportunity: React.FC = () => {
                         try {
                             const cParams = forcedVersion ? `?version_no=${forcedVersion}` : '';
                             const c = await axios.get(`http://127.0.0.1:8000/api/scoring/${id}/combined-review${cParams}`);
+=======
+                    if ((currentStatus === 'READY_FOR_REVIEW' || d.data.combined_submission_ready) && isApprover) {
+                        try {
+                            const c = await axios.get(`http://127.0.0.1:8000/api/scoring/${id}/combined-review`);
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
                             setCombinedData(c.data);
                         } catch (e) { console.warn("Could not fetch combined data", e); }
                     }
@@ -139,7 +154,11 @@ export const ScoreOpportunity: React.FC = () => {
             }
         };
         load();
+<<<<<<< HEAD
     }, [id, isApprover, location.search]);
+=======
+    }, [id, isApprover]);
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
 
     const calculateWeightedScore = () => {
         let total = 0;
@@ -405,7 +424,11 @@ export const ScoreOpportunity: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-4">
                     {/* ... (Existing Header Buttons) ... */}
+<<<<<<< HEAD
                     {(isSA || isSP) && isLocked && !isDeadlinePassed && (
+=======
+                    {isSA && isLocked && !isDeadlinePassed && (
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
                         <button
                             onClick={handleNewVersion}
                             className="flex items-center gap-1 px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold hover:bg-blue-100 transition-all shadow-sm"
@@ -589,7 +612,11 @@ export const ScoreOpportunity: React.FC = () => {
                 <div className="action-bar">
                     <button className="btn-secondary" onClick={() => navigate(-1)}>Back</button>
                     <div className="flex gap-4">
+<<<<<<< HEAD
                         {(isSA || isSP) && !isLocked && (
+=======
+                        {isSA && !isLocked && (
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
                             <>
                                 <button className="btn-secondary" onClick={() => handleSave(false)} disabled={isSaving}>Save Draft</button>
                                 <button className="btn-primary-enterprise" onClick={() => handleSave(true)} disabled={isSaving}>
@@ -597,7 +624,11 @@ export const ScoreOpportunity: React.FC = () => {
                                 </button>
                             </>
                         )}
+<<<<<<< HEAD
                         {isApprover && !combinedData && (['SUBMITTED', 'SUBMITTED_FOR_REVIEW', 'READY_FOR_REVIEW', 'UNDER_REVIEW', 'SA_SUBMITTED', 'SP_SUBMITTED'].includes(status)) && (
+=======
+                        {isApprover && !combinedData && (status === 'SUBMITTED' || status === 'SUBMITTED_FOR_REVIEW') && (
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
                             <>
                                 <button className="px-8 py-3 bg-[#A80000] text-white rounded font-bold uppercase transition-all hover:bg-red-800 shadow-lg" onClick={() => openApprovalModal('REJECT')} disabled={isSaving}>Reject</button>
                                 <button className="px-8 py-3 bg-[#217346] text-white rounded font-bold uppercase transition-all hover:bg-green-800 shadow-lg" onClick={() => openApprovalModal('APPROVE')} disabled={isSaving}>Approve</button>
@@ -621,6 +652,7 @@ export const ScoreOpportunity: React.FC = () => {
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                     <div style={{ flex: 1 }}>
+<<<<<<< HEAD
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: h.status === 'APPROVED' ? '#22c55e' : (h.status === 'REJECTED' ? '#ef4444' : '#f59e0b') }}></div>
@@ -640,6 +672,10 @@ export const ScoreOpportunity: React.FC = () => {
                                         </div>
                                         <p style={{ fontSize: '14px', color: '#334155', fontWeight: 500 }}>{h.summary || "No rationale provided."}</p>
                                         <div style={{ marginTop: '10px', fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>SUBMITTED BY: {h.created_by}</div>
+=======
+                                        <p style={{ fontSize: '14px', color: '#334155', fontWeight: 500 }}>{h.summary || "No rationale provided."}</p>
+                                        <div style={{ marginTop: '10px', fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>BY ARCHITECT: {h.created_by.split('-')[0]}</div>
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
                                     </div>
                                     <div style={{ textAlign: 'right', marginLeft: '20px' }}>
                                         <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 800 }}>RESULT</div>

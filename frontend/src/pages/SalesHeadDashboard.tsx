@@ -290,10 +290,14 @@ export function SalesHeadDashboard() {
                 <OpportunitiesTable
                     opportunities={filteredOpportunities}
                     loading={loading}
+<<<<<<< HEAD
                     onAssign={(opp) => {
                         setSelectedOppId([opp.id]);
                         setIsAssignModalOpen(true);
                     }}
+=======
+                    onAssign={(opp) => { setSelectedOppId([opp.id]); setIsAssignModalOpen(true); }}
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
                     onApprove={(id) => openApprovalModal(id, 'APPROVE')}
                     onReject={(id) => openApprovalModal(id, 'REJECT')}
                     onView={(id, jumpToScore) => {

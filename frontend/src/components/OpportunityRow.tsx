@@ -70,12 +70,15 @@ export const OpportunityRow: React.FC<OpportunityRowProps> = ({
                     } else if (status === 'EXECUTORS_ASSIGNED') {
                         styles = 'bg-cyan-50 text-cyan-700 border border-cyan-100';
                         label = 'Team Assigned';
+<<<<<<< HEAD
                     } else if (status === 'SA_SUBMITTED') {
                         styles = 'bg-blue-50 text-blue-700 border border-blue-100';
                         label = 'SA Submitted';
                     } else if (status === 'SP_SUBMITTED') {
                         styles = 'bg-purple-50 text-purple-700 border border-purple-100';
                         label = 'SP Submitted';
+=======
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
                     } else if (status === 'IN_ASSESSMENT') {
                         styles = 'bg-indigo-50 text-indigo-700 border border-indigo-100';
                         label = 'In Progress';
@@ -172,7 +175,11 @@ export const OpportunityRow: React.FC<OpportunityRowProps> = ({
             </td>
             <td className="px-2 py-3 text-right whitespace-nowrap">
                 {/* Review Actions - Only show if in Review state and approval pending for this role */}
+<<<<<<< HEAD
                 {['UNDER_REVIEW', 'READY_FOR_REVIEW', 'PENDING_GH_APPROVAL', 'PENDING_FINAL_APPROVAL', 'SA_SUBMITTED', 'SP_SUBMITTED', 'SUBMITTED'].includes(opp.workflow_status || '') && (
+=======
+                {opp.workflow_status === 'UNDER_REVIEW' && (
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
                     <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
                         {/* GH Action */}
                         {role === 'GH' && opp.gh_approval_status === 'PENDING' && (

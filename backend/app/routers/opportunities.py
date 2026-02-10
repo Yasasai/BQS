@@ -98,6 +98,7 @@ def get_all_opportunities(
     if role == 'GH':
         if tab == 'unassigned':
             query = query.filter(or_(Opportunity.workflow_status.in_(['NEW', 'OPEN', '']), Opportunity.workflow_status.is_(None)))
+<<<<<<< HEAD
         elif tab in ['pending-review', 'review']:
             query = query.filter(
                 Opportunity.workflow_status.in_(['READY_FOR_REVIEW', 'UNDER_REVIEW', 'SA_SUBMITTED', 'SP_SUBMITTED', 'PENDING_GH_APPROVAL', 'PENDING_FINAL_APPROVAL', 'SUBMITTED']),
@@ -132,6 +133,34 @@ def get_all_opportunities(
             # Needs to review assessment
             query = query.filter(
                 Opportunity.workflow_status.in_(['READY_FOR_REVIEW', 'UNDER_REVIEW', 'SA_SUBMITTED', 'SP_SUBMITTED', 'PENDING_GH_APPROVAL', 'PENDING_FINAL_APPROVAL', 'SUBMITTED']),
+=======
+        elif tab == 'pending-review':
+            query = query.filter(Opportunity.workflow_status == 'UNDER_REVIEW')
+        elif tab == 'completed':
+            query = query.filter(Opportunity.workflow_status.in_(['APPROVED', 'REJECTED', 'ACCEPTED', 'COMPLETED', 'WON', 'LOST']))
+    
+    elif role == 'PH':
+        if tab == 'action-required':
+            # Needs to assign SA
+            # Logic: I am assigned as PH, but SA is NOT assigned.
+            # We remove strict workflow_status check ("HEADS_ASSIGNED") to allow independent flow.
+            query = query.filter(
+                Opportunity.assigned_sa_id.is_(None),
+                Opportunity.workflow_status.in_(['NEW', 'OPEN', 'HEADS_ASSIGNED', 'PH_ASSIGNED', 'SH_ASSIGNED', None, ''])
+            )
+        elif tab == 'in-progress':
+            query = query.filter(Opportunity.workflow_status.in_(['IN_ASSESSMENT', 'EXECUTORS_ASSIGNED', 'UNDER_ASSESSMENT']))
+        elif tab == 'review':
+            # Needs to review assessment
+            # Logic: Combined submission ready OR at least one submission? 
+            # User requirement: "Combined version of both assessments need to go to..."
+            # So review trigger is usually combined_submission_ready
+            query = query.filter(
+                or_(
+                    Opportunity.workflow_status == 'READY_FOR_REVIEW',
+                    Opportunity.workflow_status == 'UNDER_REVIEW'
+                ),
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
                 Opportunity.ph_approval_status == 'PENDING'
             )
         elif tab == 'completed':
@@ -142,6 +171,7 @@ def get_all_opportunities(
             # Needs to assign SP
             query = query.filter(
                 Opportunity.assigned_sp_id.is_(None),
+<<<<<<< HEAD
                 or_(
                     Opportunity.workflow_status.notin_(['APPROVED', 'REJECTED', 'ACCEPTED', 'COMPLETED', 'WON', 'LOST']),
                     Opportunity.workflow_status.is_(None)
@@ -162,11 +192,25 @@ def get_all_opportunities(
              # Needs to review assessment
             query = query.filter(
                 Opportunity.workflow_status.in_(['READY_FOR_REVIEW', 'UNDER_REVIEW', 'SA_SUBMITTED', 'SP_SUBMITTED', 'PENDING_GH_APPROVAL', 'PENDING_FINAL_APPROVAL', 'SUBMITTED']),
+=======
+                Opportunity.workflow_status.in_(['NEW', 'OPEN', 'HEADS_ASSIGNED', 'PH_ASSIGNED', 'SH_ASSIGNED', None, ''])
+            )
+        elif tab == 'in-progress':
+             query = query.filter(Opportunity.workflow_status.in_(['IN_ASSESSMENT', 'EXECUTORS_ASSIGNED', 'UNDER_ASSESSMENT']))
+        elif tab == 'review':
+             # Needs to review assessment
+            query = query.filter(
+                or_(
+                    Opportunity.workflow_status == 'READY_FOR_REVIEW',
+                    Opportunity.workflow_status == 'UNDER_REVIEW'
+                ),
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
                 Opportunity.sh_approval_status == 'PENDING'
             )
         elif tab == 'completed':
              query = query.filter(Opportunity.sh_approval_status.in_(['APPROVED', 'REJECTED']))
 
+<<<<<<< HEAD
     elif role == 'SA':
         # Base Query: Active & Assigned to me as SA
         base_query = db.query(Opportunity).filter(
@@ -242,6 +286,17 @@ def get_all_opportunities(
             "submitted": base_query.filter(filter_submitted).count(),
             "completed": base_query.filter(filter_completed).count()
         }
+=======
+    elif role in ['SA', 'SP']:
+        if tab == 'assigned':
+            query = query.filter(Opportunity.workflow_status == 'EXECUTORS_ASSIGNED')
+        elif tab == 'in-progress':
+            query = query.filter(Opportunity.workflow_status == 'IN_ASSESSMENT')
+        elif tab == 'submitted':
+            query = query.filter(Opportunity.workflow_status == 'UNDER_REVIEW')
+        elif tab == 'completed':
+             query = query.filter(Opportunity.workflow_status.in_(['APPROVED', 'REJECTED']))
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
     
     # Fallback for legacy calls or specific tabs not covered above
     if not role or role not in ['GH', 'PH', 'SH', 'SA', 'SP']:
@@ -278,8 +333,12 @@ def get_all_opportunities(
         ).count()
         count_review = db.query(Opportunity).filter(
             Opportunity.is_active == True,
+<<<<<<< HEAD
             Opportunity.workflow_status.in_(['READY_FOR_REVIEW', 'UNDER_REVIEW', 'SA_SUBMITTED', 'SP_SUBMITTED', 'PENDING_GH_APPROVAL', 'PENDING_FINAL_APPROVAL', 'SUBMITTED']),
             Opportunity.gh_approval_status == 'PENDING'
+=======
+            Opportunity.workflow_status == 'UNDER_REVIEW'
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
         ).count()
         count_completed = db.query(Opportunity).filter(
             Opportunity.is_active == True,
@@ -295,6 +354,7 @@ def get_all_opportunities(
         }
 
     elif role == 'PH' and user_id:
+<<<<<<< HEAD
         # Base Query: Active & Assigned to user
         base_query = db.query(Opportunity).filter(
             Opportunity.is_active == True,
@@ -398,6 +458,59 @@ def get_all_opportunities(
             "review": base_query.filter(filter_review).count(),
             "in-progress": base_query.filter(filter_in_progress).count(),
             "action-required": base_query.filter(filter_action).count()
+=======
+        base_query = db.query(Opportunity).filter(
+            Opportunity.is_active == True, 
+            Opportunity.assigned_practice_head_id == user_id
+        )
+        
+        count_action = base_query.filter(
+            Opportunity.workflow_status.in_(['HEADS_ASSIGNED', 'EXECUTORS_ASSIGNED']),
+            Opportunity.assigned_sa_id.is_(None)
+        ).count()
+        
+        count_in_progress = base_query.filter(Opportunity.workflow_status == 'IN_ASSESSMENT').count()
+        
+        count_review = base_query.filter(
+            Opportunity.workflow_status == 'UNDER_REVIEW',
+            Opportunity.ph_approval_status == 'PENDING'
+        ).count()
+        
+        count_completed = base_query.filter(Opportunity.ph_approval_status.in_(['APPROVED', 'REJECTED'])).count()
+        
+        tab_counts = {
+            "action-required": count_action,
+            "in-progress": count_in_progress,
+            "review": count_review,
+            "completed": count_completed
+        }
+
+    elif role == 'SH' and user_id:
+        base_query = db.query(Opportunity).filter(
+            Opportunity.is_active == True, 
+            Opportunity.assigned_sales_head_id == user_id
+        )
+        
+        count_action = base_query.filter(
+            Opportunity.workflow_status.in_(['HEADS_ASSIGNED', 'EXECUTORS_ASSIGNED']),
+            Opportunity.assigned_sp_id.is_(None)
+        ).count()
+        
+        count_in_progress = base_query.filter(Opportunity.workflow_status == 'IN_ASSESSMENT').count()
+        
+        count_review = base_query.filter(
+            Opportunity.workflow_status == 'UNDER_REVIEW',
+            Opportunity.sh_approval_status == 'PENDING'
+        ).count()
+        
+        count_completed = base_query.filter(Opportunity.sh_approval_status.in_(['APPROVED', 'REJECTED'])).count()
+        
+        tab_counts = {
+            "action-required": count_action,
+            "in-progress": count_in_progress,
+            "review": count_review,
+            "completed": count_completed
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
         }
         
     elif role in ['SA', 'SP'] and user_id:
@@ -687,6 +800,7 @@ def process_approval(opp_id: str, req: ApprovalRequest, db: Session = Depends(ge
     opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
     if not opp: raise HTTPException(404, "Opportunity not found")
     
+<<<<<<< HEAD
     # Normalize decision
     decision = req.decision.upper()
     if decision == 'APPROVE': decision = 'APPROVED'
@@ -702,6 +816,15 @@ def process_approval(opp_id: str, req: ApprovalRequest, db: Session = Depends(ge
     
     # Use normalized decision for subsequent logic
     logic_decision = decision
+=======
+    # Update individual status
+    if req.role == 'GH':
+        opp.gh_approval_status = req.decision
+    elif req.role == 'PH':
+        opp.ph_approval_status = req.decision
+    elif req.role == 'SH':
+        opp.sh_approval_status = req.decision
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
         
     # Get latest score to determine logic path
     latest_ver = db.query(OppScoreVersion).filter(OppScoreVersion.opp_id == opp_id).order_by(desc(OppScoreVersion.version_no)).first()
@@ -713,7 +836,11 @@ def process_approval(opp_id: str, req: ApprovalRequest, db: Session = Depends(ge
     is_fast_track = (3.5 <= score_5 < 4.0)
 
     # 1. REJECTION Logic (Any rejection kills it)
+<<<<<<< HEAD
     if logic_decision == 'REJECTED':
+=======
+    if req.decision == 'REJECTED':
+>>>>>>> e5c61cac05a47aedc9652f160bd01592c7c91fbc
         opp.workflow_status = 'REJECTED'
         if latest_ver: latest_ver.status = 'REJECTED'
             
