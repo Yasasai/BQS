@@ -8,15 +8,16 @@ import { AssignArchitectModal, AssignmentData } from '../components/AssignArchit
 import { OpportunitiesTable } from '../components/OpportunitiesTable';
 import { Pagination } from '../components/Pagination';
 import { ManageUsersModal } from '../components/ManageUsersModal';
+import { ApprovalModal } from '../components/ApprovalModal';
 
-type TabType = 'all' | 'unassigned' | 'assigned' | 'review' | 'completed';
+
+type TabType = 'action-required' | 'in-progress' | 'review' | 'completed';
 
 const TAB_LABELS: Record<string, string> = {
-    'all': 'All Opportunities',
-    'unassigned': 'Assign Pipeline',
-    'assigned': 'Work Pipeline',
-    'review': 'Review Pipeline',
-    'completed': 'Completed Assessments'
+    'action-required': 'Action Required',
+    'in-progress': 'In Progress',
+    'review': 'Review',
+    'completed': 'Completed'
 };
 
 export function PracticeHeadDashboard() {
@@ -37,7 +38,7 @@ export function PracticeHeadDashboard() {
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
 
-    const [activeTab, setActiveTab] = useState<TabType>('unassigned');
+    const [activeTab, setActiveTab] = useState<TabType>('action-required');
     const [viewMode, setViewMode] = useState('All Opportunities');
 
     // Modal state
@@ -52,17 +53,21 @@ export function PracticeHeadDashboard() {
     useEffect(() => {
         if (user?.role === 'SOLUTION_ARCHITECT') {
             navigate('/assigned-to-me');
+        } else if (user?.role === 'GH' || user?.role === 'SH') {
+            // SH has their own dashboard now
+            if (user?.role === 'SH') navigate('/sales/dashboard');
+            else navigate('/management/dashboard');
         }
     }, [user, navigate]);
 
     // Sync URL with Tab
     useEffect(() => {
         const path = location.pathname;
-        if (path.includes('unassigned')) setActiveTab('unassigned');
-        else if (path.includes('assigned')) setActiveTab('assigned');
+        if (path.includes('action-required')) setActiveTab('action-required');
+        else if (path.includes('in-progress')) setActiveTab('in-progress');
         else if (path.includes('review')) setActiveTab('review');
         else if (path.includes('completed')) setActiveTab('completed');
-        else setActiveTab('all');
+        else setActiveTab('action-required');
     }, [location.pathname]);
 
     // Debounce search
@@ -87,7 +92,9 @@ export function PracticeHeadDashboard() {
         const params = new URLSearchParams({
             page: currentPage.toString(),
             limit: pageSize.toString(),
-            tab: activeTab
+            tab: activeTab,
+            user_id: user?.id || '',
+            role: user?.role || ''
         });
         if (debouncedSearch) params.append('search', debouncedSearch);
 
@@ -123,13 +130,13 @@ export function PracticeHeadDashboard() {
         const idsToAssign = Array.isArray(oppIds) ? oppIds : [oppIds];
         try {
             await Promise.all(idsToAssign.map(id =>
-                fetch('http://127.0.0.1:8000/api/inbox/assign', {
+                fetch(`http://127.0.0.1:8000/api/opportunities/${id}/assign`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        opp_id: id.toString(),
-                        sa_email: primarySA,
-                        assigned_by_user_id: user?.id || 'PRACTICE_HEAD'
+                        role: 'SA',
+                        user_id: primarySA, // This is the user ID now (assigned from modal)
+                        assigned_by: user?.id || 'PRACTICE_HEAD'
                     })
                 })
             ));
@@ -142,38 +149,40 @@ export function PracticeHeadDashboard() {
         }
     };
 
-    const handleApprove = async (oppIds: string | string[]) => {
-        const ids = Array.isArray(oppIds) ? oppIds : [oppIds];
-        if (!confirm(`Approve ${ids.length} assessment(s)?`)) return;
-        try {
-            await Promise.all(ids.map(id =>
-                fetch(`http://127.0.0.1:8000/api/scoring/${id}/review/approve`, { method: 'POST' })
-            ));
-            fetchOpportunities();
-            setSelectedOppId([]);
-        } catch (e) {
-            console.error(e);
-            alert("Approval failed");
-        }
+
+    // --- Approval Modal Logic ---
+    const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+    const [approvalAction, setApprovalAction] = useState<'APPROVE' | 'REJECT' | null>(null);
+    const [approvalIds, setApprovalIds] = useState<string[]>([]);
+
+    const openApprovalModal = (ids: string | string[], action: 'APPROVE' | 'REJECT') => {
+        setApprovalIds(Array.isArray(ids) ? ids : [ids]);
+        setApprovalAction(action);
+        setIsApprovalModalOpen(true);
     };
 
-    const handleReject = async (oppIds: string | string[]) => {
-        const ids = Array.isArray(oppIds) ? oppIds : [oppIds];
-        const reason = prompt("Enter rejection reason for selected items:");
-        if (!reason) return;
+    const handleModalConfirm = async (comment: string) => {
+        if (approvalIds.length === 0 || !approvalAction) return;
+
         try {
-            await Promise.all(ids.map(id =>
-                fetch(`http://127.0.0.1:8000/api/scoring/${id}/review/reject`, {
+            await Promise.all(approvalIds.map(id =>
+                fetch(`http://127.0.0.1:8000/api/opportunities/${id}/approve`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ reason })
+                    body: JSON.stringify({
+                        role: 'PH',
+                        decision: approvalAction,
+                        user_id: user?.id,
+                        comment: comment
+                    })
                 })
             ));
             fetchOpportunities();
-            setSelectedOppId([]);
-        } catch (e) {
-            console.error(e);
-            alert("Rejection failed");
+            setSelectedOppId([]); // Clear selection
+            setIsApprovalModalOpen(false);
+        } catch (error) {
+            console.error(error);
+            alert("Action failed.");
         }
     };
 
@@ -199,38 +208,86 @@ export function PracticeHeadDashboard() {
 
                 {/* Tab Switcher */}
                 <div className="flex items-center gap-8 border-b border-gray-200 mb-6 mt-4">
-                    {(Object.keys(TAB_LABELS) as TabType[]).map((tabId) => (
-                        <button
-                            key={tabId}
-                            onClick={() => navigate(`/practice-head/${tabId}`)}
-                            className={`pb-3 text-sm font-medium transition-all relative ${activeTab === tabId
-                                ? 'text-[#0572CE]'
-                                : 'text-[#666666] hover:text-[#333333]'
-                                }`}
-                        >
-                            {TAB_LABELS[tabId]} ({tabCounts[tabId] || 0})
-                            {activeTab === tabId && (
-                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0572CE]" />
-                            )}
-                        </button>
-                    ))}
+                    {(Object.keys(TAB_LABELS) as TabType[])
+                        .map((tabId) => (
+                            <button
+                                key={tabId}
+                                onClick={() => navigate(`/practice-head/${tabId}`)}
+                                className={`pb-3 text-sm font-medium transition-all relative ${activeTab === tabId
+                                    ? 'text-[#0572CE]'
+                                    : 'text-[#666666] hover:text-[#333333]'
+                                    }`}
+                            >
+                                {TAB_LABELS[tabId]} ({tabCounts[tabId] || 0})
+                                {activeTab === tabId && (
+                                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0572CE]" />
+                                )}
+                            </button>
+                        ))}
                 </div>
 
-                <div className="flex items-center justify-between py-2 mb-4 text-xs">
+
+                <div className="flex items-center justify-between py-3 mb-4 px-4 bg-white border border-gray-200 rounded-lg shadow-sm">
                     <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            <span className="text-[13px] text-[#333333]">Find</span>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    placeholder="Search Name, Customer..."
-                                    className="border border-gray-300 rounded px-2 py-1.5 text-[13px] w-64 focus:outline-none focus:border-[#0572CE] bg-white pl-8"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
-                                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                        {selectedOppId.length > 0 ? (
+                            <>
+                                <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 rounded-lg border border-blue-200">
+                                    <span className="text-sm font-bold text-blue-900">{selectedOppId.length} selected</span>
+                                    <button
+                                        onClick={() => setSelectedOppId([])}
+                                        className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                                <button
+                                    onClick={() => setIsAssignModalOpen(true)}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded hover:bg-blue-700 shadow-sm transition-all"
+                                >
+                                    <UserPlus size={16} />
+                                    Assign to Solution Architect
+                                </button>
+                                {(() => {
+                                    const selectedItems = opportunities.filter(o => selectedOppId.includes(o.id));
+                                    const canReview = selectedItems.length > 0 && selectedItems.every(o => {
+                                        const s = (o.workflow_status || '').toUpperCase();
+                                        return s === 'SUBMITTED_FOR_REVIEW' || s === 'SUBMITTED' || s === 'READY_FOR_REVIEW';
+                                    });
+                                    return canReview && (
+                                        <>
+                                            <button
+                                                onClick={() => handleApprove(selectedOppId)}
+                                                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-green-600 rounded hover:bg-green-700 shadow-sm transition-all"
+                                            >
+                                                <CheckCircle size={16} />
+                                                Approve Selected
+                                            </button>
+                                            <button
+                                                onClick={() => handleReject(selectedOppId)}
+                                                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-red-600 rounded hover:bg-red-700 shadow-sm transition-all"
+                                            >
+                                                <XCircle size={16} />
+                                                Reject Selected
+                                            </button>
+                                        </>
+                                    );
+                                })()}
+                            </>
+                        ) : (
+                            <div className="flex items-center gap-2">
+                                <span className="text-[13px] text-[#333333]">Find</span>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        placeholder="Search Name, Customer..."
+                                        className="border border-gray-300 rounded px-2 py-1.5 text-[13px] w-64 focus:outline-none focus:border-[#0572CE] bg-white pl-8"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                     <div className="flex items-center gap-2">
                         <button onClick={() => fetchOpportunities()} className="flex items-center gap-2 px-4 py-1.5 text-[13px] font-normal text-[#333333] bg-white border border-gray-300 rounded hover:bg-gray-50">
@@ -240,34 +297,6 @@ export function PracticeHeadDashboard() {
                     </div>
                 </div>
 
-                {selectedOppId.length > 0 && (
-                    <div className="bg-[#E3F2FD] border border-[#BBDEFB] px-4 py-2 mb-4 rounded flex items-center justify-between">
-                        <span className="text-sm font-medium text-[#0D47A1]">{selectedOppId.length} item(s) selected</span>
-                        <div className="flex gap-2">
-                            {(() => {
-                                const selectedItems = opportunities.filter(o => selectedOppId.includes(o.id));
-                                const canAssign = selectedItems.length > 0; // Allow assigning/reassigning everything as requested
-                                const canReview = selectedItems.length > 0 && selectedItems.every(o => {
-                                    const s = (o.workflow_status || '').toUpperCase();
-                                    return s === 'SUBMITTED_FOR_REVIEW' || s === 'SUBMITTED';
-                                });
-                                return (
-                                    <>
-                                        {canAssign && (
-                                            <button onClick={() => setIsAssignModalOpen(true)} className="px-3 py-1 bg-[#1976D2] text-white text-xs font-medium rounded hover:bg-[#1565C0]">Assign / Reassign Selected</button>
-                                        )}
-                                        {canReview && (
-                                            <>
-                                                <button onClick={() => handleApprove(selectedOppId)} className="px-3 py-1 bg-[#43A047] text-white text-xs font-medium rounded hover:bg-[#2E7D32]">Accept Selected</button>
-                                                <button onClick={() => handleReject(selectedOppId)} className="px-3 py-1 bg-[#E53935] text-white text-xs font-medium rounded hover:bg-[#C62828]">Reject Selected</button>
-                                            </>
-                                        )}
-                                    </>
-                                );
-                            })()}
-                        </div>
-                    </div>
-                )}
 
                 <div className="flex items-center gap-2 mb-2">
                     <span className="text-[13px] text-[#333333] font-medium">{TAB_LABELS[activeTab] || 'Opportunities'}</span>
@@ -277,8 +306,8 @@ export function PracticeHeadDashboard() {
                     opportunities={filteredOpportunities}
                     loading={loading}
                     onAssign={(opp) => { setSelectedOppId([opp.id]); setIsAssignModalOpen(true); }}
-                    onApprove={handleApprove}
-                    onReject={handleReject}
+                    onApprove={(id) => openApprovalModal(id, 'APPROVE')}
+                    onReject={(id) => openApprovalModal(id, 'REJECT')}
                     onView={(id, jumpToScore) => {
                         if (jumpToScore) {
                             navigate(`/score/${id}`);
@@ -289,6 +318,7 @@ export function PracticeHeadDashboard() {
                     formatCurrency={formatCurrency}
                     selectedIds={selectedOppId}
                     onSelectionChange={setSelectedOppId}
+                    role="PH"
                 />
 
                 <div className="mt-[-48px] relative z-10">
@@ -307,6 +337,14 @@ export function PracticeHeadDashboard() {
                 opportunityIds={selectedOppId}
                 onAssign={(data: AssignmentData) => { handleAssignToSA(selectedOppId, data.sa_owner, data.secondary_sa); }}
             />
+
+            <ApprovalModal
+                isOpen={isApprovalModalOpen}
+                onClose={() => setIsApprovalModalOpen(false)}
+                onConfirm={handleModalConfirm}
+                type={approvalAction || 'APPROVE'}
+            />
+
             <ManageUsersModal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} />
         </div>
     );

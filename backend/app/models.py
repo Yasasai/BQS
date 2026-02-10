@@ -63,6 +63,19 @@ class Opportunity(Base):
     workflow_status = Column(String, nullable=True) # NEW, ASSIGNED_TO_SA, UNDER_ASSESSMENT, APPROVED, REJECTED, etc.
     is_active = Column(Boolean, default=True)
 
+    # --- Workflow Assignment Columns ---
+    assigned_practice_head_id = Column(String, ForeignKey("app_user.user_id"), nullable=True)
+    assigned_sales_head_id = Column(String, ForeignKey("app_user.user_id"), nullable=True)
+    assigned_sa_id = Column(String, ForeignKey("app_user.user_id"), nullable=True)
+    assigned_sp_id = Column(String, ForeignKey("app_user.user_id"), nullable=True)
+
+    # --- Approval Status Columns ---
+    gh_approval_status = Column(String, default='PENDING', nullable=True) # PENDING, APPROVED, REJECTED
+    ph_approval_status = Column(String, default='PENDING', nullable=True)
+    sh_approval_status = Column(String, default='PENDING', nullable=True)
+    
+    combined_submission_ready = Column(Boolean, default=False)
+
     # Relationships
     assignments = relationship("OpportunityAssignment", back_populates="opportunity")
     score_versions = relationship("OppScoreVersion", back_populates="opportunity")
@@ -103,7 +116,9 @@ class OppScoreVersion(Base):
     recommendation = Column(String, nullable=True)   
     summary_comment = Column(Text, nullable=True)
     
-    created_by_user_id = Column(String, ForeignKey("app_user.user_id"), nullable=False)
+    created_by_user_id = Column(String, ForeignKey("app_user.user_id"), nullable=True)
+    sa_submitted = Column(Boolean, default=False)
+    sp_submitted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     submitted_at = Column(DateTime, nullable=True)
     attachment_name = Column(String, nullable=True) # Added for evidence upload
@@ -140,3 +155,24 @@ class SyncMeta(Base):
     sync_status = Column(String, nullable=True) # SUCCESS, FAILED
     records_processed = Column(Integer, default=0)
     extra_info = Column(JSON, nullable=True)
+
+# --- 6. CONNECTIVITY VERIFICATION ---
+
+class OracleOpportunity(Base):
+    """
+    Isolated table for verifying Oracle CRM connectivity and data flow.
+    Used only for backend checks, not linked to the main application workflow.
+    """
+    __tablename__ = "oracle_opportunities"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    opty_id = Column(String, nullable=False, index=True)
+    opty_number = Column(String, nullable=True)
+    name = Column(String, nullable=True)
+    account_name = Column(String, nullable=True)
+    revenue = Column(Float, nullable=True)
+    currency = Column(String, nullable=True)
+    sales_stage = Column(String, nullable=True)
+    last_update_date = Column(DateTime, nullable=True)
+    raw_json = Column(JSON, nullable=True)
+    synced_at = Column(DateTime, default=datetime.utcnow)

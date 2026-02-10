@@ -1,7 +1,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, or_, and_
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
@@ -67,7 +67,7 @@ def get_my_assignments(user_id: str, db: Session = Depends(get_db)):
             "version_no": v.version_no
         })
         
-    # 2. Add currently assigned deals that haven't been started yet (NOT_STARTED)
+    # 2. Add currently assigned deals from OpportunityAssignment table
     assignments = db.query(OpportunityAssignment).filter(
         OpportunityAssignment.assigned_to_user_id == user_id,
         OpportunityAssignment.status == "ACTIVE"
@@ -77,6 +77,7 @@ def get_my_assignments(user_id: str, db: Session = Depends(get_db)):
         o = a.opportunity
         if not o: continue
         if o.opp_id not in processed_opp_ids:
+            processed_opp_ids.add(o.opp_id)
             results.append({
                 "opp_id": o.opp_id,
                 "row_id": o.opp_id,
@@ -85,7 +86,31 @@ def get_my_assignments(user_id: str, db: Session = Depends(get_db)):
                 "customer_name": o.customer_name,
                 "deal_value": o.deal_value or 0,
                 "crm_last_updated_at": o.crm_last_updated_at,
-                "latest_score_status": "NOT_STARTED",
+                "latest_score_status": o.workflow_status or "NOT_STARTED",
+                "version_no": None
+            })
+            
+    # 3. Add direct assignments from Opportunity table (Primary Source)
+    direct_opps = db.query(Opportunity).filter(
+        or_(
+            Opportunity.assigned_sa_id == user_id,
+            Opportunity.assigned_sp_id == user_id
+        ),
+        Opportunity.is_active == True
+    ).all()
+    
+    for o in direct_opps:
+        if o.opp_id not in processed_opp_ids:
+            processed_opp_ids.add(o.opp_id)
+            results.append({
+                "opp_id": o.opp_id,
+                "row_id": o.opp_id,
+                "opp_number": o.opp_number,
+                "opp_name": o.opp_name,
+                "customer_name": o.customer_name,
+                "deal_value": o.deal_value or 0,
+                "crm_last_updated_at": o.crm_last_updated_at,
+                "latest_score_status": o.workflow_status or "NOT_STARTED",
                 "version_no": None
             })
             

@@ -31,8 +31,13 @@ class UserRead(BaseModel):
 # --- Endpoints ---
 
 @router.get("/", response_model=List[UserRead])
-def list_users(db: Session = Depends(get_db)):
-    users = db.query(AppUser).all()
+def list_users(role: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(AppUser)
+    
+    if role:
+        query = query.join(UserRole).join(Role).filter(Role.role_code == role)
+        
+    users = query.all()
     results = []
     for u in users:
         role_codes = [ur.role.role_code for ur in u.user_roles]

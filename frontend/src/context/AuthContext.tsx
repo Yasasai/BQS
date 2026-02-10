@@ -22,13 +22,13 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// MOCK USERS for simulation
+// MOCK USERS for simulation - Aligned with backend/seed_users.py
 const MOCK_USERS: Record<UserRole, User> = {
-    GH: { id: 'GH_001', email: 'global.head@company.com', name: 'Global Head (Gary)', role: 'GH', displayRole: 'Global Head' },
-    PH: { id: 'PH_001', email: 'practice.head@company.com', name: 'Practice Head (Sarah)', role: 'PH', displayRole: 'Practice Head' },
-    SH: { id: 'SH_001', email: 'sales.head@company.com', name: 'Sales Head (Sam)', role: 'SH', displayRole: 'Sales Head' },
-    SA: { id: 'SA_JOHN', email: 'john.sa@example.com', name: 'John Architect', role: 'SA', displayRole: 'Solution Architect' },
-    SP: { id: 'SP_JANE', email: 'jane.sp@example.com', name: 'Jane Presales', role: 'SP', displayRole: 'Sales Presales' },
+    GH: { id: 'gh-001', email: 'james.wilson@company.com', name: 'James Wilson', role: 'GH', displayRole: 'Global Head' },
+    PH: { id: 'ph-001', email: 'sarah.mitchell@company.com', name: 'Sarah Mitchell', role: 'PH', displayRole: 'Practice Head' },
+    SH: { id: 'sh-001', email: 'robert.chen@company.com', name: 'Robert Chen', role: 'SH', displayRole: 'Sales Head' },
+    SA: { id: 'sa-001', email: 'john.doe@company.com', name: 'John Doe', role: 'SA', displayRole: 'Solution Architect' },
+    SP: { id: 'sp-001', email: 'emily.white@company.com', name: 'Emily White', role: 'SP', displayRole: 'Sales Person' },
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

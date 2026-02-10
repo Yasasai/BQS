@@ -33,18 +33,14 @@ export function SolutionArchitectDashboard() {
     };
 
     // Metrics Calculations
-    const activeCount = assignments.filter(a => ['NOT_STARTED', 'DRAFT', 'UNDER_ASSESSMENT', 'ASSIGNED_TO_SA'].includes(a.latest_score_status.toUpperCase())).length;
+    const activeCount = assignments.filter(a => !['APPROVED', 'REJECTED', 'SUBMITTED', 'COMPLETED', 'WON', 'LOST', 'ACCEPTED'].includes(a.latest_score_status.toUpperCase())).length;
     const totalValue = assignments.reduce((acc, curr) => acc + (curr.deal_value || 0), 0);
     const completedCount = assignments.filter(a => ['APPROVED', 'REJECTED', 'SUBMITTED', 'COMPLETED', 'WON', 'LOST', 'ACCEPTED'].includes(a.latest_score_status.toUpperCase())).length;
 
     // Filtering logic
     const filteredAssignments = assignments.filter(a => {
-        const status = a.latest_score_status.toUpperCase();
-        if (activeTab === 'active') {
-            return ['NOT_STARTED', 'DRAFT', 'UNDER_ASSESSMENT', 'ASSIGNED_TO_SA'].includes(status);
-        } else {
-            return ['APPROVED', 'REJECTED', 'SUBMITTED', 'COMPLETED', 'WON', 'LOST', 'ACCEPTED'].includes(status);
-        }
+        const isHistorical = ['APPROVED', 'REJECTED', 'SUBMITTED', 'COMPLETED', 'WON', 'LOST', 'ACCEPTED'].includes(a.latest_score_status.toUpperCase());
+        return activeTab === 'active' ? !isHistorical : isHistorical;
     });
 
     const fetchAssignments = React.useCallback(() => {
