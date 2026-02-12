@@ -23,6 +23,7 @@ export function SolutionArchitectDashboard() {
     // Action menu state
     const [openActionMenu, setOpenActionMenu] = useState<number | null>(null);
 
+
     useEffect(() => {
         fetchOpportunities();
     }, []);

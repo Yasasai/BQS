@@ -1,0 +1,18 @@
+PoA's:
+1. First understand how Oracle HCM and CRM work to better design my application - Sundari/
+2. Designed the functionalies as per my better understanding, how better can I design this for further no-problem resolving?
+3. Then take Problem Statements from different people and try to improve it more better.
+4. Code Reusables also I am ready to take responsibility
+5. API Verification - I feel API is giving wrong data
+6. Then all these opportunities need to give proper roles - based on the people by API
+7. After all this, check the database creations and correct it accordingly
+
+Sales Person -> Opportunity Scanning of Customer -> Opportunity Creation -> Then creation of Opp. ID (Irrespective of Business) -> Customer talks -> Geo/Sales Head can assign to related Practice Team 
+
+Self Tender Customer PO -> Sales Team brings in Practice Heads, Solution Architect -> Request for Proposal -> Business Success -> Request for Information / Request for Quotation -> Customer PO (Hardware, Software, Configurations, Implement, Working Conditions) -> 
+Geo/Sales Head can assign to related Practice Team 
+
+Govt Customers -> RFP -> Tender (low quote) -> Business Success
+
+
+

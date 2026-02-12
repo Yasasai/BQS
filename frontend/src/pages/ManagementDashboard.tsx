@@ -1,39 +1,88 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Opportunity } from '../types';
-import { HelpCircle, Search, ChevronDown, MoreHorizontal } from 'lucide-react';
 import { TopBar } from '../components/TopBar';
-import { AssignPracticeModal } from '../components/AssignPracticeModal';
-import { FinalDecisionModal } from '../components/FinalDecisionModal';
-import { SyncStatusPopup } from '../components/SyncStatusPopup';
-import { Terminal } from 'lucide-react';
+import { CheckCircle, XCircle, Search, RefreshCw, BarChart3, TrendingUp, PieChart } from 'lucide-react';
+import { OpportunitiesTable } from '../components/OpportunitiesTable';
+import { Pagination } from '../components/Pagination';
+import { ApprovalModal } from '../components/ApprovalModal';
+import { useAuth } from '../context/AuthContext';
 
-type ListFilter = 'All Opportunities' | 'Approved by Practice' | 'Still with Practice';
+type TabType = 'unassigned' | 'missing-ph' | 'missing-sh' | 'in-progress' | 'review' | 'completed';
+
+const TAB_LABELS: Record<string, string> = {
+    'unassigned': 'Unassigned',
+    'missing-ph': 'Missing Practice Head',
+    'missing-sh': 'Missing Sales Head',
+    'in-progress': 'In Progress',
+    'review': 'Under Review',
+    'completed': 'Completed'
+};
 
 export function ManagementDashboard() {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [listFilter, setListFilter] = useState<ListFilter>('All Opportunities');
+    const [totalCount, setTotalCount] = useState(0);
+    const [globalPipelineValue, setGlobalPipelineValue] = useState(0);
+    const [tabCounts, setTabCounts] = useState<Record<string, number>>({});
 
-    // Modal states
-    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-    const [isDecisionModalOpen, setIsDecisionModalOpen] = useState(false);
-    const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
-    const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
-    const [openActionMenu, setOpenActionMenu] = useState<number | null>(null);
+    // Pagination & Search State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [activeTab, setActiveTab] = useState<TabType>('unassigned');
+
+    const [selectedOppId, setSelectedOppId] = useState<(string | number)[]>([]);
+
+    // Role-based Access Control
+    useEffect(() => {
+        if (user?.role === 'SA') navigate('/assigned-to-me');
+        else if (user?.role === 'PH') navigate('/practice-head/dashboard');
+    }, [user, navigate]);
+
+    // Sync URL with Tab
+    useEffect(() => {
+        const path = window.location.pathname;
+        const matchedTab = (Object.keys(TAB_LABELS) as TabType[]).find(t => path.includes(t));
+        if (matchedTab) setActiveTab(matchedTab);
+    }, [window.location.pathname]);
+
+    // Debounce search
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm);
+            setCurrentPage(1);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
     useEffect(() => {
         fetchOpportunities();
-    }, []);
+    }, [currentPage, pageSize, debouncedSearch, activeTab]);
 
     const fetchOpportunities = () => {
         setLoading(true);
-        fetch('http://localhost:8000/api/opportunities')
+        const params = new URLSearchParams({
+            page: currentPage.toString(),
+            limit: pageSize.toString(),
+            tab: activeTab,
+            user_id: user?.id || '',
+            role: user?.role || ''
+        });
+        if (debouncedSearch) params.append('search', debouncedSearch);
+
+        fetch(`http://localhost:8000/api/opportunities/?${params}`)
             .then(res => res.json())
             .then(data => {
-                setOpportunities(data);
+                if (data.items && Array.isArray(data.items)) {
+                    setOpportunities(data.items);
+                    setTotalCount(data.total_count || 0);
+                    if (data.counts) setTabCounts(data.counts);
+                    if (data.total_value) setGlobalPipelineValue(data.total_value);
+                }
                 setLoading(false);
             })
             .catch(err => {
@@ -42,225 +91,187 @@ export function ManagementDashboard() {
             });
     };
 
-    const formatCurrency = (amount: number, currency: string = 'USD') => {
-        const symbols: Record<string, string> = { 'SAR': 'ر.س', 'INR': 'Rs', 'PHP': 'Php', 'GBP': '£' };
-        const symbol = symbols[currency] || '$';
-        const formattedAmount = new Intl.NumberFormat('en-US').format(amount);
-        if (currency === 'SAR') return `${formattedAmount} ${symbol}`;
-        return `${symbol}${formattedAmount}`;
+    // --- Approval Modal Logic ---
+    const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+    const [approvalAction, setApprovalAction] = useState<'APPROVE' | 'REJECT' | null>(null);
+    const [approvalIds, setApprovalIds] = useState<(string | number)[]>([]);
+
+    const openApprovalModal = (ids: (string | number) | (string | number)[], action: 'APPROVE' | 'REJECT') => {
+        setApprovalIds(Array.isArray(ids) ? ids : [ids]);
+        setApprovalAction(action);
+        setIsApprovalModalOpen(true);
     };
 
-    const formatDate = (dateString?: string) => {
-        if (!dateString) return '-';
-        const d = new Date(dateString);
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        return `${d.getDate().toString().padStart(2, '0')}-${months[d.getMonth()]}-${d.getFullYear()}`;
-    };
+    const handleModalConfirm = async (comment: string) => {
+        if (approvalIds.length === 0 || !approvalAction) return;
 
-    const getFilteredOpportunities = () => {
-        let filtered = opportunities;
-
-        if (listFilter === 'Approved by Practice') {
-            filtered = filtered.filter(o => o.workflow_status === 'PENDING_GOVERNANCE' || o.workflow_status === 'PENDING_FINAL_DECISION');
-        } else if (listFilter === 'Still with Practice') {
-            filtered = filtered.filter(o => ['ASSIGNED_TO_PRACTICE', 'PENDING_ASSESSMENT', 'UNDER_ASSESSMENT', 'REVIEW_PENDING'].includes(o.workflow_status || ''));
+        try {
+            await Promise.all(approvalIds.map(id =>
+                fetch(`http://localhost:8000/api/opportunities/${id}/approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        role: user?.role,
+                        decision: approvalAction,
+                        user_id: user?.id,
+                        comment: comment
+                    })
+                })
+            ));
+            fetchOpportunities();
+            setSelectedOppId([]);
+            setIsApprovalModalOpen(false);
+        } catch (error) {
+            console.error(error);
+            alert("Action failed.");
         }
-
-        // Filter out opportunities that are closed in CRM
-        filtered = filtered.filter(o => o.workflow_status !== 'CLOSED_IN_CRM');
-
-        if (searchQuery) {
-            filtered = filtered.filter(o =>
-                o.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                o.remote_id.includes(searchQuery)
-            );
-        }
-
-        return filtered;
     };
 
-    const filteredOpps = getFilteredOpportunities();
+    const formatCurrency = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val);
 
     return (
-        <div className="min-h-screen bg-white flex flex-col font-['Open_Sans',_Tahoma,_sans-serif] text-[12px] text-gray-800">
+        <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-900">
             <TopBar />
 
-            {/* Header Controls Area */}
-            <div className="bg-white px-4 py-4 space-y-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                        <h1 className="text-xl font-normal text-gray-700">Management Insights & Decisions</h1>
-                        <HelpCircle size={14} className="text-gray-400 cursor-help" />
+            <div className="flex flex-col flex-1 p-8">
+                {/* Header Section */}
+                <div className="flex justify-between items-end mb-8">
+                    <div>
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Global Pipeline Governance</h1>
+                        <p className="text-gray-500 font-medium">Monitoring {totalCount} Opportunities Across All Regions</p>
                     </div>
-
-                    {/* CRM Sync Button */}
-                    <button
-                        onClick={() => setIsSyncModalOpen(true)}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20"
-                    >
-                        <Terminal size={14} />
-                        CRM Sync Status
-                    </button>
+                    <div className="bg-white px-6 py-4 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-6">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Total Value</span>
+                            <span className="text-2xl font-black text-blue-600">{formatCurrency(globalPipelineValue)}</span>
+                        </div>
+                        <div className="h-10 w-[1px] bg-gray-100" />
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Active Items</span>
+                            <span className="text-2xl font-black text-gray-900">{totalCount}</span>
+                        </div>
+                    </div>
                 </div>
 
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-8">
-                        {/* Find Section */}
-                        <div className="flex items-center gap-2">
-                            <span className="text-gray-600">Find</span>
-                            <div className="flex border border-gray-300 rounded shadow-sm bg-white overflow-hidden">
-                                <div className="px-2 py-1 bg-gray-50 border-r border-gray-300 flex items-center gap-1">
-                                    <span>Name</span>
-                                </div>
-                                <input
-                                    type="text"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="px-3 py-1 focus:outline-none w-48 text-gray-700"
-                                />
-                                <button className="px-2 py-1 border-l border-gray-300 hover:bg-gray-50 flex items-center justify-center">
-                                    <Search size={14} className="text-gray-500" />
-                                </button>
-                            </div>
+                {/* Metrics Bar */}
+                <div className="grid grid-cols-4 gap-6 mb-8">
+                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all group">
+                        <div className="flex items-center gap-4 mb-3">
+                            <div className="p-2 bg-orange-100 text-orange-600 rounded-lg group-hover:scale-110 transition-transform"><BarChart3 size={20} /></div>
+                            <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Unassigned</span>
                         </div>
+                        <div className="text-3xl font-black text-gray-900">{tabCounts['unassigned'] || 0}</div>
+                    </div>
+                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all group">
+                        <div className="flex items-center gap-4 mb-3">
+                            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg group-hover:scale-110 transition-transform"><TrendingUp size={20} /></div>
+                            <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">In Progress</span>
+                        </div>
+                        <div className="text-3xl font-black text-gray-900">{tabCounts['in-progress'] || 0}</div>
+                    </div>
+                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all group">
+                        <div className="flex items-center gap-4 mb-3">
+                            <div className="p-2 bg-purple-100 text-purple-600 rounded-lg group-hover:scale-110 transition-transform"><PieChart size={20} /></div>
+                            <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Under Review</span>
+                        </div>
+                        <div className="text-3xl font-black text-gray-900">{tabCounts['review'] || 0}</div>
+                    </div>
+                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all group">
+                        <div className="flex items-center gap-4 mb-3">
+                            <div className="p-2 bg-green-100 text-green-600 rounded-lg group-hover:scale-110 transition-transform"><CheckCircle size={20} /></div>
+                            <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Completed</span>
+                        </div>
+                        <div className="text-3xl font-black text-gray-900">{tabCounts['completed'] || 0}</div>
+                    </div>
+                </div>
 
-                        {/* List Section */}
-                        <div className="flex items-center gap-2">
-                            <span className="text-gray-600">List</span>
-                            <div className="relative">
-                                <select
-                                    value={listFilter}
-                                    onChange={(e) => setListFilter(e.target.value as ListFilter)}
-                                    className="appearance-none border border-gray-300 rounded px-3 py-1 pr-10 bg-white shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-400 w-52"
-                                >
-                                    <option>All Opportunities</option>
-                                    <option>Approved by Practice</option>
-                                    <option>Still with Practice</option>
-                                </select>
-                                <ChevronDown size={14} className="absolute right-3 top-2 text-gray-400 pointer-events-none" />
-                            </div>
-                        </div>
+                {/* Main Content Area */}
+                <div className="bg-white rounded-3xl shadow-xl border border-gray-200 overflow-hidden flex flex-col flex-1">
+                    {/* Tabs */}
+                    <div className="flex items-center gap-8 px-8 border-b border-gray-100">
+                        {(Object.keys(TAB_LABELS) as TabType[]).map(t => (
+                            <button
+                                key={t}
+                                onClick={() => navigate(`/management/${t}`)}
+                                className={`py-6 text-xs font-black uppercase tracking-[0.2em] relative transition-all ${activeTab === t ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                {TAB_LABELS[t]} ({tabCounts[t] || 0})
+                                {activeTab === t && <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-600 rounded-t-full shadow-[0_-2px_10px_rgba(37,99,235,0.3)]" />}
+                            </button>
+                        ))}
                     </div>
 
-                    {/* Actions Area */}
-                    <div className="flex items-center gap-2 pr-2 border-l border-gray-200 pl-4">
-                        <button className="flex items-center gap-4 px-4 py-1.5 border border-gray-300 rounded bg-white hover:bg-gray-50 text-gray-700 shadow-sm transition-all group">
-                            Actions
-                            <ChevronDown size={14} className="text-gray-400 group-hover:text-gray-600" />
+                    {/* Toolbar */}
+                    <div className="px-8 py-4 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            {selectedOppId.length > 0 ? (
+                                <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left-4">
+                                    <div className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-black shadow-lg">
+                                        {selectedOppId.length} SELECTED
+                                    </div>
+                                    <button onClick={() => setSelectedOppId([])} className="text-xs font-bold text-gray-400 hover:text-gray-600 uppercase tracking-widest">Clear</button>
+                                    <div className="h-6 w-[1px] bg-gray-200 mx-2" />
+                                    {activeTab === 'review' && (
+                                        <div className="flex gap-2">
+                                            <button onClick={() => openApprovalModal(selectedOppId, 'APPROVE')} className="px-6 py-2 bg-green-600 text-white text-xs font-black rounded-xl shadow-md hover:bg-green-700 transition-all uppercase tracking-widest">Approve</button>
+                                            <button onClick={() => openApprovalModal(selectedOppId, 'REJECT')} className="px-6 py-2 bg-red-600 text-white text-xs font-black rounded-xl shadow-md hover:bg-red-700 transition-all uppercase tracking-widest">Reject</button>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="relative group">
+                                    <input
+                                        type="text"
+                                        placeholder="SEARCH GLOBAL PIPELINE..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="pl-12 pr-6 py-3 bg-white border border-gray-200 rounded-2xl text-xs font-bold tracking-widest focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none w-96 transition-all group-hover:shadow-md"
+                                    />
+                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-blue-500 transition-colors" size={18} />
+                                </div>
+                            )}
+                        </div>
+                        <button onClick={() => fetchOpportunities()} className="p-3 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 transition-all hover:rotate-180 duration-500 shadow-sm">
+                            <RefreshCw size={20} className="text-gray-400" />
                         </button>
                     </div>
+
+                    {/* Table Wrapper */}
+                    <div className="flex-1 overflow-auto px-8 py-4">
+                        <OpportunitiesTable
+                            opportunities={opportunities}
+                            loading={loading}
+                            onView={(id, jumpToScore) => {
+                                if (jumpToScore) navigate(`/score/${id}`);
+                                else navigate(`/opportunity/${id}`);
+                            }}
+                            onApprove={(id) => openApprovalModal(id, 'APPROVE')}
+                            onReject={(id) => openApprovalModal(id, 'REJECT')}
+                            formatCurrency={formatCurrency}
+                            selectedIds={selectedOppId as any}
+                            onSelectionChange={setSelectedOppId as any}
+                            role={user?.role || 'GH'}
+                        />
+                    </div>
+
+                    {/* Pagination */}
+                    <div className="px-8 py-6 bg-gray-50/50 border-t border-gray-100">
+                        <Pagination
+                            currentPage={currentPage}
+                            totalCount={totalCount}
+                            pageSize={pageSize}
+                            onPageChange={setCurrentPage}
+                        />
+                    </div>
                 </div>
             </div>
 
-            {/* Table Area */}
-            <div className="flex-1 overflow-auto">
-                <table className="min-w-full border-collapse">
-                    <thead className="sticky top-0 bg-white border-b border-gray-200">
-                        <tr className="text-black font-bold text-left bg-[#F8F9FA]">
-                            <th className="px-4 py-3 border-r border-gray-100 min-w-[100px]">Win (%)</th>
-                            <th className="px-4 py-3 border-r border-gray-100 min-w-[120px]">Opp Num</th>
-                            <th className="px-4 py-3 border-r border-gray-100 min-w-[250px]">Name</th>
-                            <th className="px-4 py-3 border-r border-gray-100 min-w-[150px]">Owner</th>
-                            <th className="px-4 py-3 border-r border-gray-100 min-w-[150px]">Practice</th>
-                            <th className="px-4 py-3 border-r border-gray-100 min-w-[150px]">Status</th>
-                            <th className="px-4 py-3 border-r border-gray-100 min-w-[150px]">Amount</th>
-                            <th className="px-4 py-3 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading ? (
-                            <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-500 italic">Synchronizing CRM data...</td></tr>
-                        ) : filteredOpps.length === 0 ? (
-                            <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-500 border-t border-gray-100">No data found.</td></tr>
-                        ) : (
-                            filteredOpps.map((opp) => (
-                                <tr key={opp.id} className="border-b border-gray-50 hover:bg-blue-50/10 transition-colors">
-                                    <td className="px-4 py-2.5">
-                                        <div className="w-10 h-5 bg-green-700 text-white flex items-center justify-center rounded-full text-[10px] font-bold">
-                                            {opp.win_probability || 0}
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-2.5 text-blue-600 hover:underline cursor-pointer" onClick={() => navigate(`/opportunity/${opp.id}`)}>
-                                        {opp.remote_id}
-                                    </td>
-                                    <td className="px-4 py-2.5 text-blue-600 hover:underline cursor-pointer font-medium" onClick={() => navigate(`/opportunity/${opp.id}`)}>
-                                        {opp.name}
-                                    </td>
-                                    <td className="px-4 py-2.5 text-blue-600 hover:underline cursor-pointer">
-                                        {opp.sales_owner || '-'}
-                                    </td>
-                                    <td className="px-4 py-2.5 text-gray-600">
-                                        {opp.practice || opp.assigned_practice || '-'}
-                                    </td>
-                                    <td className="px-4 py-2.5 text-gray-600">
-                                        {opp.workflow_status === 'PENDING_GOVERNANCE' || opp.workflow_status === 'PENDING_FINAL_DECISION'
-                                            ? 'Approved by Practice'
-                                            : opp.workflow_status?.replace(/_/g, ' ') || 'New'}
-                                    </td>
-                                    <td className="px-4 py-2.5 text-gray-700 font-semibold tracking-tight">
-                                        {formatCurrency(opp.deal_value || 0, opp.currency)}
-                                    </td>
-                                    <td className="px-4 py-2.5 text-right relative">
-                                        <button
-                                            onClick={() => setOpenActionMenu(openActionMenu === opp.id ? null : opp.id)}
-                                            className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded"
-                                        >
-                                            <MoreHorizontal size={14} />
-                                        </button>
-                                        {openActionMenu === opp.id && (
-                                            <div className="absolute right-4 mt-1 w-48 bg-white border border-gray-200 rounded shadow-xl z-50 py-1 text-left overflow-hidden translate-y-0">
-                                                <button onClick={() => navigate(`/opportunity/${opp.id}`)} className="block w-full px-4 py-2 hover:bg-gray-50">View Details</button>
-                                                {opp.remote_url && (
-                                                    <a
-                                                        href={opp.remote_url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="block w-full px-4 py-2 hover:bg-gray-50 text-blue-600 border-b border-gray-100"
-                                                    >
-                                                        View in Oracle CRM
-                                                    </a>
-                                                )}
-                                                {opp.workflow_status === 'NEW_FROM_CRM' && (
-                                                    <button onClick={() => { setSelectedOpportunity(opp); setIsAssignModalOpen(true); setOpenActionMenu(null); }} className="block w-full px-4 py-2 hover:bg-gray-50 text-blue-600 font-medium">Assign to Practice</button>
-                                                )}
-                                                {opp.workflow_status === 'READY_FOR_MGMT_REVIEW' && (
-                                                    <button onClick={() => { setSelectedOpportunity(opp); setIsDecisionModalOpen(true); setOpenActionMenu(null); }} className="block w-full px-4 py-2 hover:bg-gray-50 text-green-600 font-medium">Review Bid (GO/NO-GO)</button>
-                                                )}
-                                                {(opp.workflow_status === 'PENDING_GOVERNANCE' || opp.workflow_status === 'PENDING_FINAL_DECISION') && (
-                                                    <button onClick={() => { setSelectedOpportunity(opp); setIsDecisionModalOpen(true); setOpenActionMenu(null); }} className="block w-full px-4 py-2 hover:bg-gray-50 text-green-600 font-medium">Final GO/NO-GO</button>
-                                                )}
-                                            </div>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
-
-            <SyncStatusPopup
-                isOpen={isSyncModalOpen}
-                onClose={() => setIsSyncModalOpen(false)}
+            <ApprovalModal
+                isOpen={isApprovalModalOpen}
+                onClose={() => setIsApprovalModalOpen(false)}
+                onConfirm={handleModalConfirm}
+                type={approvalAction || 'APPROVE'}
             />
-
-            {selectedOpportunity && (
-                <>
-                    <AssignPracticeModal
-                        opportunity={selectedOpportunity}
-                        isOpen={isAssignModalOpen}
-                        onClose={() => setIsAssignModalOpen(false)}
-                        onSuccess={fetchOpportunities}
-                    />
-                    <FinalDecisionModal
-                        opportunity={selectedOpportunity}
-                        isOpen={isDecisionModalOpen}
-                        onClose={() => setIsDecisionModalOpen(false)}
-                        onSuccess={fetchOpportunities}
-                    />
-                </>
-            )}
         </div>
     );
 }
-
