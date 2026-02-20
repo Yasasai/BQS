@@ -22,10 +22,23 @@ export interface Opportunity {
     // 3-Role Workflow Status
     status?: string; // Internal Status for workflow (New, Scoring Pending, etc.)
     workflow_status?: string;
-    assigned_practice?: string;
-    assigned_practice_head?: string;
-    assigned_sa?: string;      // Solution Architect
-    assigned_sa_secondary?: string;
+
+    // Assignment IDs
+    assigned_practice_head_id?: string;
+    assigned_sales_head_id?: string;
+    assigned_sa_id?: string;
+    assigned_sp_id?: string;
+
+    assigned_practice_head?: string; // Display Name
+    assigned_sa?: string;      // Display Name
+    assigned_sp?: string;      // Display Name
+    assigned_sales_head?: string; // Display Name
+
+    // Approval Statuses
+    gh_approval_status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+    ph_approval_status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+    sh_approval_status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+    combined_submission_ready?: boolean;
 
     // Timestamps
     assigned_to_practice_at?: string;

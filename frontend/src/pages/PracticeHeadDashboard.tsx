@@ -1,44 +1,134 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Opportunity } from '../types';
 import { TopBar } from '../components/TopBar';
-import { ChevronDown, MoreHorizontal, Filter, UserPlus, CheckCircle, XCircle } from 'lucide-react';
+import { UserPlus, CheckCircle, XCircle, RefreshCw, Search, BarChart3, TrendingUp, PieChart, ChevronDown, AlertCircle, PlayCircle, FileText, FileSpreadsheet, File as FileIcon } from 'lucide-react';
+import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportUtils';
 import { AssignArchitectModal, AssignmentData } from '../components/AssignArchitectModal';
+import { OpportunitiesTable, FilterState } from '../components/OpportunitiesTable';
+import { Pagination } from '../components/Pagination';
+import { ApprovalModal } from '../components/ApprovalModal';
+import { MultiSelect } from '../components/MultiSelect';
+import { useAuth } from '../context/AuthContext';
 
-type TabType = 'unassigned' | 'under-assessment' | 'pending-review' | 'all';
+type TabType = 'all' | 'action-required' | 'in-progress' | 'review' | 'completed';
+
+const TAB_LABELS: Record<string, string> = {
+    'all': 'All My Items',
+    'action-required': 'Action Required',
+    'in-progress': 'In Progress',
+    'review': 'Review',
+    'completed': 'Completed'
+};
 
 export function PracticeHeadDashboard() {
     const navigate = useNavigate();
+    const { user } = useAuth();
+    const location = useLocation();
+
+    // Data State
     const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<TabType>('unassigned');
+    const [totalCount, setTotalCount] = useState(0);
+    const [globalPipelineValue, setGlobalPipelineValue] = useState(0);
+    const [tabCounts, setTabCounts] = useState<Record<string, number>>({});
+
+    // Pagination & Search State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [selectedTabs, setSelectedTabs] = useState<string[]>(['all']);
+    const [columnFilters, setColumnFilters] = useState<FilterState[]>([]);
+
+    // Metadata for filters
+    const [allRegions, setAllRegions] = useState<string[]>([]);
+    const [allPractices, setAllPractices] = useState<string[]>([]);
+    const [allStages, setAllStages] = useState<string[]>([]);
+    const [allStatuses, setAllStatuses] = useState<string[]>([]);
+    const [isActionsOpen, setIsActionsOpen] = useState(false);
+
+    useEffect(() => {
+        const endpoints = ['regions', 'practices', 'stages', 'statuses'];
+        endpoints.forEach(end => {
+            fetch(`http://localhost:8000/api/opportunities/metadata/${end}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (end === 'regions') setAllRegions(data);
+                    if (end === 'practices') setAllPractices(data);
+                    if (end === 'stages') setAllStages(data);
+                    if (end === 'statuses') setAllStatuses(data);
+                })
+                .catch(err => console.error(`Failed to fetch ${end}`, err));
+        });
+    }, []);
 
     // Modal state
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-    const [selectedOppId, setSelectedOppId] = useState<number[]>([]);
+    const [selectedOppId, setSelectedOppId] = useState<string[]>([]);
 
-    // Mock: In real app, get from auth context
-    const currentPracticeHead = "John Doe"; // Replace with actual logged-in user
-    const currentPractice = "Cloud Infrastructure"; // Replace with actual user's practice
+    // Role-based Access Control
+    useEffect(() => {
+        if (user?.role === 'SA') {
+            navigate('/assigned-to-me');
+        } else if (user?.role === 'GH' || user?.role === 'SH') {
+            if (user?.role === 'SH') navigate('/sales/dashboard');
+            else navigate('/management/dashboard');
+        }
+    }, [user, navigate]);
 
-    // Action menu state
-    const [openActionMenu, setOpenActionMenu] = useState<number | null>(null);
+    // Sync URL with Tab
+    useEffect(() => {
+        const path = location.pathname;
+        if (path.includes('action-required')) setSelectedTabs(['action-required']);
+        else if (path.includes('in-progress')) setSelectedTabs(['in-progress']);
+        else if (path.includes('review')) setSelectedTabs(['review']);
+        else if (path.includes('completed')) setSelectedTabs(['completed']);
+        else if (path.includes('all')) setSelectedTabs(['all']);
+        else setSelectedTabs(['action-required']);
+    }, [location.pathname]);
+
+    // Debounce search
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm);
+            setCurrentPage(1);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
     useEffect(() => {
-        fetchOpportunities();
-    }, []);
+        if (user?.id) fetchOpportunities();
+        setSelectedOppId([]);
+    }, [currentPage, pageSize, debouncedSearch, selectedTabs, columnFilters, user?.id]);
 
     const fetchOpportunities = () => {
         setLoading(true);
-        fetch('http://localhost:8000/api/opportunities')
-            .then(res => res.json())
+        const params = new URLSearchParams({
+            page: currentPage.toString(),
+            limit: pageSize.toString(),
+            tab: selectedTabs.join(','),
+            user_id: user?.id || '',
+            role: user?.role || ''
+        });
+        if (debouncedSearch) params.append('search', debouncedSearch);
+        if (columnFilters.length > 0) params.append('filters', JSON.stringify(columnFilters));
+
+        fetch(`http://localhost:8000/api/opportunities/?${params}`)
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                return res.json();
+            })
             .then(data => {
-                // Filter to only show opportunities assigned to this practice head
-                const myOpportunities = data.filter((opp: Opportunity) =>
-                    opp.assigned_practice === currentPractice ||
-                    opp.assigned_practice_head === currentPracticeHead
-                );
-                setOpportunities(myOpportunities);
+                if (data.items) {
+                    setOpportunities(data.items);
+                    setTotalCount(data.total_count || 0);
+                    if (data.counts) setTabCounts(data.counts);
+                    if (data.total_value) setGlobalPipelineValue(data.total_value);
+                } else {
+                    setOpportunities(data);
+                    setTotalCount(data.length);
+                }
                 setLoading(false);
             })
             .catch(err => {
@@ -47,289 +137,283 @@ export function PracticeHeadDashboard() {
             });
     };
 
-    // Calculate tab counts
-    const unassignedCount = opportunities.filter(o =>
-        o.workflow_status === 'ASSIGNED_TO_PRACTICE' && !o.assigned_sa
-    ).length;
-
-    const underAssessmentCount = opportunities.filter(o =>
-        ['ASSIGNED_TO_SA', 'UNDER_ASSESSMENT'].includes(o.workflow_status || '')
-    ).length;
-
-    const pendingReviewCount = opportunities.filter(o =>
-        o.workflow_status === 'SUBMITTED_FOR_REVIEW'
-    ).length;
-
-    // Filter opportunities based on active tab
-    const getFilteredOpportunities = () => {
-        let filtered = opportunities;
-
-        if (activeTab === 'unassigned') {
-            filtered = filtered.filter(o =>
-                o.workflow_status === 'ASSIGNED_TO_PRACTICE' && !o.assigned_sa
-            );
-        } else if (activeTab === 'under-assessment') {
-            filtered = filtered.filter(o =>
-                ['ASSIGNED_TO_SA', 'UNDER_ASSESSMENT'].includes(o.workflow_status || '')
-            );
-        } else if (activeTab === 'pending-review') {
-            filtered = filtered.filter(o =>
-                o.workflow_status === 'SUBMITTED_FOR_REVIEW'
-            );
-        }
-
-        return filtered;
-    };
-
-    const filteredOpportunities = getFilteredOpportunities();
-
-    // Handle assign to SA
-    const handleAssignToSA = async (oppId: number, primarySA: string, secondarySA?: string) => {
+    const handleAssignToSA = async (oppIds: string | string[], primarySA: string) => {
+        const idsToAssign = Array.isArray(oppIds) ? oppIds : [oppIds];
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${oppId}/assign-sa`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    primary_sa: primarySA,
-                    secondary_sa: secondarySA
+            await Promise.all(idsToAssign.map(id =>
+                fetch(`http://localhost:8000/api/opportunities/${id}/assign`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        role: 'SA',
+                        user_id: primarySA,
+                        assigned_by: user?.id || 'PRACTICE_HEAD'
+                    })
                 })
-            });
+            ));
 
-            if (!response.ok) throw new Error('Failed to assign SA');
-
-            alert(`Assigned to ${primarySA}`);
             fetchOpportunities();
+            setSelectedOppId([]);
+            setIsAssignModalOpen(false);
         } catch (error) {
             console.error('Error:', error);
             alert('Failed to assign SA');
         }
     };
 
-    // Handle review decision
-    const handleReviewDecision = async (oppId: number, decision: 'APPROVED' | 'REJECTED', comments: string) => {
+    // --- Approval Modal Logic ---
+    const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+    const [approvalAction, setApprovalAction] = useState<'APPROVE' | 'REJECT' | null>(null);
+    const [approvalIds, setApprovalIds] = useState<string[]>([]);
+
+    const openApprovalModal = (ids: string | string[], action: 'APPROVE' | 'REJECT') => {
+        setApprovalIds(Array.isArray(ids) ? ids : [ids]);
+        setApprovalAction(action);
+        setIsApprovalModalOpen(true);
+    };
+
+    const handleModalConfirm = async (comment: string) => {
+        if (approvalIds.length === 0 || !approvalAction) return;
+
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${oppId}/practice-review`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ decision, comments })
-            });
-
-            if (!response.ok) throw new Error('Failed to submit review');
-
-            alert(`Assessment ${decision.toLowerCase()}`);
+            await Promise.all(approvalIds.map(id =>
+                fetch(`http://localhost:8000/api/opportunities/${id}/approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        role: 'PH',
+                        decision: approvalAction,
+                        user_id: user?.id,
+                        comment: comment
+                    })
+                })
+            ));
             fetchOpportunities();
+            setSelectedOppId([]);
+            setIsApprovalModalOpen(false);
         } catch (error) {
-            console.error('Error:', error);
-            alert('Failed to submit review');
+            console.error(error);
+            alert("Action failed.");
         }
     };
 
-    const getStatusBadge = (status?: string) => {
-        const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
-            'ASSIGNED_TO_PRACTICE': { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Needs SA Assignment' },
-            'ASSIGNED_TO_SA': { bg: 'bg-blue-100', text: 'text-blue-800', label: 'With SA' },
-            'UNDER_ASSESSMENT': { bg: 'bg-indigo-100', text: 'text-indigo-800', label: 'In Progress' },
-            'SUBMITTED_FOR_REVIEW': { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Awaiting Review' },
-            'APPROVED_BY_PRACTICE': { bg: 'bg-green-100', text: 'text-green-800', label: 'Approved' },
-        };
-
-        const config = statusConfig[status || 'ASSIGNED_TO_PRACTICE'] || statusConfig['ASSIGNED_TO_PRACTICE'];
-        return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>{config.label}</span>;
-    };
+    const formatCurrency = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val);
 
     return (
-        <div className="min-h-screen bg-white flex flex-col font-sans text-gray-900">
+        <div className="min-h-screen bg-[#fcfbf8] flex flex-col font-sans text-gray-800">
             <TopBar />
 
-            <div className="flex flex-col flex-1">
-                {/* Page Title */}
-                <div className="px-6 pt-6 pb-4">
-                    <h1 className="text-2xl font-semibold text-gray-900">Practice Head Dashboard</h1>
-                    <p className="text-sm text-gray-600 mt-1">Resource Allocation & Quality Assurance - {currentPractice}</p>
+            <div className="flex flex-col flex-1 p-6">
+                {/* Oracle Breadcrumb/Header */}
+                <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-2">
+                        <h1 className="text-xl text-gray-700">Practice Dashboard</h1>
+                        <span className="text-gray-400 cursor-help">ⓘ</span>
+                    </div>
+                    <div className="flex gap-2">
+                        <div className="flex items-center gap-2 bg-white px-3 py-1 border border-gray-200 rounded text-xs">
+                            <span className="text-gray-500">Pipeline:</span>
+                            <span className="font-bold text-gray-800">{formatCurrency(globalPipelineValue)}</span>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="px-6">
-                    <div className="flex gap-2 border-b border-gray-200">
-                        <button
-                            onClick={() => setActiveTab('unassigned')}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors relative ${activeTab === 'unassigned' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
-                        >
-                            Unassigned ({unassignedCount})
-                            {unassignedCount > 0 && (
-                                <span className="absolute -top-1 -right-1 bg-purple-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                                    {unassignedCount}
-                                </span>
+                {/* Filter Toolbar - Oracle Style */}
+                <div className="bg-white border border-gray-200 p-2 mb-4 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <span className="text-gray-600 font-medium">Find</span>
+                            <div className="flex bg-white border border-gray-300 rounded overflow-hidden">
+                                <select className="bg-gray-50 px-1 border-r border-gray-300 outline-none">
+                                    <option>Name</option>
+                                </select>
+                                <input
+                                    type="text"
+                                    className="px-2 py-0.5 outline-none w-48"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                                <button className="px-2 bg-gray-50 hover:bg-gray-100 border-l border-gray-300">
+                                    <Search size={14} className="text-gray-500" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
+                            <MultiSelect
+                                label="View List"
+                                options={Object.entries(TAB_LABELS).map(([k, v]) => ({ label: v, value: k, count: tabCounts[k] }))}
+                                selected={selectedTabs}
+                                onChange={setSelectedTabs}
+                                placeholder="All My Items"
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
+                            <MultiSelect
+                                label="Region"
+                                options={allRegions.map(r => ({ label: r.toUpperCase(), value: r }))}
+                                selected={columnFilters.find(f => f.id === 'geo')?.value || []}
+                                onChange={(vals) => {
+                                    setColumnFilters(prev => {
+                                        const next = prev.filter(f => f.id !== 'geo');
+                                        if (vals.length > 0) next.push({ id: 'geo', value: vals });
+                                        return next;
+                                    });
+                                }}
+                                placeholder="All Regions"
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
+                            <MultiSelect
+                                label="Practice"
+                                options={allPractices.map(p => ({ label: p.toUpperCase(), value: p }))}
+                                selected={columnFilters.find(f => f.id === 'practice')?.value || []}
+                                onChange={(vals) => {
+                                    setColumnFilters(prev => {
+                                        const next = prev.filter(f => f.id !== 'practice');
+                                        if (vals.length > 0) next.push({ id: 'practice', value: vals });
+                                        return next;
+                                    });
+                                }}
+                                placeholder="All Practices"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <div className="relative">
+                            <button
+                                onClick={() => setIsActionsOpen(!isActionsOpen)}
+                                className="px-3 py-1 bg-white border border-gray-300 rounded text-xs font-semibold hover:bg-gray-50 flex items-center gap-1 min-w-[80px]"
+                            >
+                                Actions <ChevronDown size={12} className={`transition-transform ${isActionsOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {isActionsOpen && (
+                                <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 shadow-lg rounded z-50 py-1">
+                                    <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Export As</div>
+                                    <button
+                                        onClick={() => { exportToExcel(opportunities, 'opportunities_export'); setIsActionsOpen(false); }}
+                                        className="w-full text-left px-4 py-2 text-xs hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                        <FileSpreadsheet size={14} className="text-green-600" /> Excel (.xlsx)
+                                    </button>
+                                    <button
+                                        onClick={() => { exportToCSV(opportunities, 'opportunities_export'); setIsActionsOpen(false); }}
+                                        className="w-full text-left px-4 py-2 text-xs hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                        <FileIcon size={14} className="text-blue-600" /> CSV (.csv)
+                                    </button>
+                                    <button
+                                        onClick={() => { exportToPDF(opportunities, 'opportunities_export'); setIsActionsOpen(false); }}
+                                        className="w-full text-left px-4 py-2 text-xs hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                        <FileText size={14} className="text-red-600" /> PDF (.pdf)
+                                    </button>
+                                </div>
                             )}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('under-assessment')}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'under-assessment' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
-                        >
-                            Under Assessment ({underAssessmentCount})
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('pending-review')}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors relative ${activeTab === 'pending-review' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
-                        >
-                            Pending Review ({pendingReviewCount})
-                            {pendingReviewCount > 0 && (
-                                <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                                    {pendingReviewCount}
-                                </span>
-                            )}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('all')}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'all' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
-                        >
-                            All ({opportunities.length})
+                        </div>
+                        <button className="px-3 py-1 bg-white border border-gray-300 rounded text-xs font-semibold hover:bg-gray-50 text-blue-700">
+                            Advanced Search
                         </button>
                     </div>
                 </div>
 
-                {/* Action Summary */}
-                <div className="px-6 py-4 bg-white border-b border-gray-200">
-                    <div className="text-sm text-gray-600">
-                        <span className="font-semibold text-gray-900">{filteredOpportunities.length}</span> opportunities
-                        {activeTab === 'unassigned' && <span className="ml-2 text-purple-600 font-medium">→ Awaiting SA Assignment</span>}
-                        {activeTab === 'pending-review' && <span className="ml-2 text-orange-600 font-medium">→ Awaiting Your Review</span>}
+                {/* Selected Status Bar */}
+                {selectedOppId.length > 0 && (
+                    <div className="bg-blue-50 border border-blue-200 px-4 py-2 mb-4 flex items-center justify-between animate-in fade-in slide-in-from-top-1">
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs font-bold text-blue-800">{selectedOppId.length} Selected</span>
+                            <div className="flex gap-2">
+                                <button onClick={() => setIsAssignModalOpen(true)} className="oracle-btn !bg-white">Assign SA</button>
+                                {selectedTabs.includes('review') && (
+                                    <>
+                                        <button onClick={() => openApprovalModal(selectedOppId, 'APPROVE')} className="oracle-btn !bg-green-600 !text-white !border-green-700">Approve</button>
+                                        <button onClick={() => openApprovalModal(selectedOppId, 'REJECT')} className="oracle-btn !bg-red-600 !text-white !border-red-700">Reject</button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                        <button onClick={() => setSelectedOppId([])} className="text-xs text-blue-700 hover:underline">Clear Selection</button>
                     </div>
+                )}
+
+                {/* Metric Summary Cards - Simplified */}
+                <div className="grid grid-cols-4 gap-4 mb-4">
+                    {[
+                        { label: 'Action Required', count: tabCounts['action-required'] || 0, tab: 'action-required', color: 'border-red-400' },
+                        { label: 'In Progress', count: tabCounts['in-progress'] || 0, tab: 'in-progress', color: 'border-blue-400' },
+                        { label: 'Review', count: tabCounts['review'] || 0, tab: 'review', color: 'border-purple-400' },
+                        { label: 'Completed', count: tabCounts['completed'] || 0, tab: 'completed', color: 'border-green-400' }
+                    ].map(m => (
+                        <div
+                            key={m.label}
+                            onClick={() => navigate(`/practice-head/${m.tab}`)}
+                            className={`bg-white p-3 border-t-2 ${m.color} border-x border-b border-gray-200 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors`}
+                        >
+                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tight mb-1">{m.label}</div>
+                            <div className="text-xl font-bold text-gray-700">{m.count}</div>
+                        </div>
+                    ))}
                 </div>
 
-                {/* Table */}
-                <div className="flex-1 overflow-auto bg-white">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left w-12">
-                                    <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4" />
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Opp ID</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Name/Customer</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Deal Size</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Status</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Assigned SA</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Score</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {loading ? (
-                                <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-500">Loading...</td></tr>
-                            ) : filteredOpportunities.length === 0 ? (
-                                <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-500">No opportunities found</td></tr>
-                            ) : (
-                                filteredOpportunities.map((opp) => (
-                                    <tr key={opp.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4" />
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm font-medium text-blue-600 hover:underline cursor-pointer" onClick={() => navigate(`/opportunity/${opp.id}`)}>
-                                                {opp.remote_id || `OPP-${opp.id}`}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="text-sm font-medium text-gray-900">{opp.name}</div>
-                                            <div className="text-sm text-gray-500">{opp.customer}</div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {new Intl.NumberFormat('en-US', { style: 'currency', currency: opp.currency || 'USD', maximumFractionDigits: 0 }).format(opp.deal_value)}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            {getStatusBadge(opp.workflow_status)}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {opp.assigned_sa || <span className="text-gray-400 italic">Unassigned</span>}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {opp.win_probability ? `${Math.round(opp.win_probability)}%` : '-'}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
-                                            <button
-                                                onClick={() => setOpenActionMenu(openActionMenu === opp.id ? null : opp.id)}
-                                                className="text-gray-400 hover:text-gray-600"
-                                            >
-                                                <MoreHorizontal size={18} />
-                                            </button>
-                                            {openActionMenu === opp.id && (
-                                                <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-10 border border-gray-200">
-                                                    <div className="py-1">
-                                                        <button
-                                                            onClick={() => navigate(`/opportunity/${opp.id}`)}
-                                                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                                        >
-                                                            View Details
-                                                        </button>
-                                                        {opp.workflow_status === 'ASSIGNED_TO_PRACTICE' && !opp.assigned_sa && (
-                                                            <button
-                                                                onClick={() => {
-                                                                    setSelectedOppId([opp.id]);
-                                                                    setIsAssignModalOpen(true);
-                                                                    setOpenActionMenu(null);
-                                                                }}
-                                                                className="block w-full text-left px-4 py-2 text-sm text-purple-600 hover:bg-gray-100 font-medium"
-                                                            >
-                                                                <UserPlus size={14} className="inline mr-2" />
-                                                                Assign to SA
-                                                            </button>
-                                                        )}
-                                                        {opp.workflow_status === 'SUBMITTED_FOR_REVIEW' && (
-                                                            <>
-                                                                <div className="border-t border-gray-200 my-1"></div>
-                                                                <button
-                                                                    onClick={() => navigate(`/score/${opp.id}`)}
-                                                                    className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-gray-100"
-                                                                >
-                                                                    View Assessment
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        const comments = prompt('Approval Comments (optional):') || '';
-                                                                        if (window.confirm('Approve this assessment and send to Management?')) {
-                                                                            handleReviewDecision(opp.id, 'APPROVED', comments);
-                                                                        }
-                                                                    }}
-                                                                    className="block w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-gray-100 font-medium"
-                                                                >
-                                                                    <CheckCircle size={14} className="inline mr-2" />
-                                                                    Approve
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        const comments = prompt('Rejection Reason (required):');
-                                                                        if (comments && window.confirm('Reject and send back to SA for rework?')) {
-                                                                            handleReviewDecision(opp.id, 'REJECTED', comments);
-                                                                        }
-                                                                    }}
-                                                                    className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 font-medium"
-                                                                >
-                                                                    <XCircle size={14} className="inline mr-2" />
-                                                                    Reject (Rework)
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                {/* Table Area */}
+                <div className="flex-1 min-h-0 flex flex-col">
+                    <div className="flex-1 overflow-auto">
+                        <OpportunitiesTable
+                            opportunities={opportunities}
+                            loading={loading}
+                            onAssign={(opp) => { setSelectedOppId([opp.id]); setIsAssignModalOpen(true); }}
+                            onApprove={(id) => openApprovalModal(id, 'APPROVE')}
+                            onReject={(id) => openApprovalModal(id, 'REJECT')}
+                            onView={(id, jumpToScore) => {
+                                if (jumpToScore) navigate(`/score/${id}`);
+                                else navigate(`/opportunity/${id}`);
+                            }}
+                            formatCurrency={formatCurrency}
+                            selectedIds={selectedOppId}
+                            onSelectionChange={setSelectedOppId}
+                            role="PH"
+                            filters={columnFilters}
+                            onFilterChange={setColumnFilters}
+                            metadata={{
+                                regions: allRegions,
+                                practices: allPractices,
+                                stages: allStages,
+                                statuses: allStatuses
+                            }}
+                        />
+                    </div>
+
+                    <div className="bg-white border border-gray-200 border-t-0 p-3">
+                        <Pagination
+                            currentPage={currentPage}
+                            totalCount={totalCount}
+                            pageSize={pageSize}
+                            onPageChange={setCurrentPage}
+                        />
+                    </div>
                 </div>
             </div>
 
-            {/* Modals */}
             <AssignArchitectModal
                 isOpen={isAssignModalOpen}
                 onClose={() => setIsAssignModalOpen(false)}
                 opportunityIds={selectedOppId}
+                title="Assign Solution Architect"
+                targetRole="SA"
                 onAssign={(data: AssignmentData) => {
-                    handleAssignToSA(selectedOppId[0], data.sa_owner, data.secondary_sa);
+                    handleAssignToSA(selectedOppId, data.sa_owner);
                 }}
+            />
+
+            <ApprovalModal
+                isOpen={isApprovalModalOpen}
+                onClose={() => setIsApprovalModalOpen(false)}
+                onConfirm={handleModalConfirm}
+                type={approvalAction || 'APPROVE'}
             />
         </div>
     );

@@ -1,0 +1,7 @@
+1. Able to submit assessment and store the scores with selected reasons 
+2. Able to see all my logs as previous versions, I have an option to see my previous version scoring with attachments and justification also in my frontend itself
+
+
+-- now I want to check if I am able to upload the PDFs and store it on my PC - or change according to storage tomorrow
+Then I want to correct my front-end to make sure that submitted assessments are at one place and un-submitted are at another place
+Then I want to make sure that all the front-end is as per what I am showing to the user - user-friendly 
