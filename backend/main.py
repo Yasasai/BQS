@@ -9,9 +9,9 @@ import sys
 # FIX: Add project root
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.database import init_db
+from backend.app.core.database import init_db
 from backend.sync_manager import sync_opportunities
-from backend.routers import auth, inbox, scoring
+from backend.app.routers import auth, inbox, scoring, opportunities, users
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -19,7 +19,8 @@ async def lifespan(app: FastAPI):
     init_db()
     # Auto-Sync on Startup (Lightweight)
     try:
-        sync_opportunities()
+        from backend.sync_manager import sync_opportunities_async
+        await sync_opportunities_async()
     except Exception as e:
         print(f"Startup Sync Error: {e}")
     yield
@@ -37,10 +38,13 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(inbox.router)
 app.include_router(scoring.router)
+app.include_router(opportunities.router)
+app.include_router(users.router)
 
 @app.post("/api/sync-force")
-def force_sync(background_tasks: BackgroundTasks):
-    background_tasks.add_task(sync_opportunities)
+async def force_sync(background_tasks: BackgroundTasks):
+    from backend.sync_manager import sync_opportunities_async
+    background_tasks.add_task(sync_opportunities_async)
     return {"status": "started"}
 
 if __name__ == "__main__":

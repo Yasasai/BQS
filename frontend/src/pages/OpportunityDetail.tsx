@@ -1,27 +1,47 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Opportunity } from '../types';
+import { useAuth } from '../context/AuthContext';
 import { TopBar } from '../components/TopBar';
 import { ChevronLeft, FileText, TrendingUp, History, File } from 'lucide-react';
 
 type TabType = 'overview' | 'score' | 'versions' | 'documents';
 
+interface AssessmentHistoryItem {
+    version: number;
+    status: string;
+    score: number;
+    recommendation: string;
+    summary: string;
+    attachment_name?: string;
+    created_at: string;
+    created_by: string;
+}
+
 export function OpportunityDetail() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<TabType>('overview');
 
+    const isSA = user?.role === 'SA';
+    const isSP = user?.role === 'SP';
+    const canSeeScore = isSA || isSP;
+
+    const [history, setHistory] = useState<AssessmentHistoryItem[]>([]);
+
     useEffect(() => {
         if (id) {
             fetchOpportunityDetail(id);
+            fetchHistory(id);
         }
     }, [id]);
 
     const fetchOpportunityDetail = (oppId: string) => {
         setLoading(true);
-        fetch(`http://localhost:8000/api/oracle-opportunity/${oppId}`)
+        fetch(`http://localhost:8000/api/opportunities/${oppId}`)
             .then(res => res.json())
             .then(data => {
                 setOpportunity(data);
@@ -31,6 +51,13 @@ export function OpportunityDetail() {
                 console.error("Failed to fetch opportunity detail", err);
                 setLoading(false);
             });
+    };
+
+    const fetchHistory = (oppId: string) => {
+        fetch(`http://localhost:8000/api/scoring/${oppId}/history`)
+            .then(res => res.json())
+            .then(data => setHistory(data))
+            .catch(err => console.error("Failed to fetch history", err));
     };
 
     if (loading) {
@@ -102,16 +129,18 @@ export function OpportunityDetail() {
                             <FileText size={16} />
                             Overview
                         </button>
-                        <button
-                            onClick={() => setActiveTab('score')}
-                            className={`flex items-center gap-2 px-1 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'score'
-                                ? 'border-blue-600 text-blue-600'
-                                : 'border-transparent text-gray-600 hover:text-gray-900'
-                                }`}
-                        >
-                            <TrendingUp size={16} />
-                            Score
-                        </button>
+                        {canSeeScore && (
+                            <button
+                                onClick={() => setActiveTab('score')}
+                                className={`flex items-center gap-2 px-1 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'score'
+                                    ? 'border-blue-600 text-blue-600'
+                                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                                    }`}
+                            >
+                                <TrendingUp size={16} />
+                                Score
+                            </button>
+                        )}
                         <button
                             onClick={() => setActiveTab('versions')}
                             className={`flex items-center gap-2 px-1 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'versions'
@@ -132,8 +161,8 @@ export function OpportunityDetail() {
                             <File size={16} />
                             Documents
                         </button>
-                    </div>
-                </div>
+                    </div >
+                </div >
 
                 {/* Content Area */}
                 <div className="flex-1 p-6">
@@ -301,54 +330,124 @@ export function OpportunityDetail() {
                                 </div>
                             </div>
                         </div>
-                    )}
+                    )
+                    }
 
-                    {activeTab === 'score' && (
-                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                            <div className="text-center py-12">
-                                <TrendingUp size={48} className="mx-auto text-gray-400 mb-4" />
-                                <h3 className="text-lg font-medium text-gray-900 mb-2">Assessment Score</h3>
-                                <p className="text-sm text-gray-600 mb-6">
-                                    No assessment has been completed for this opportunity yet.
-                                </p>
-                                <button
-                                    onClick={() => navigate(`/score/${id}`)}
-                                    className="bg-blue-600 text-white px-6 py-2 rounded text-sm font-medium hover:bg-blue-700 shadow-sm"
-                                >
-                                    Start Assessment
-                                </button>
+                    {
+                        activeTab === 'score' && (
+                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                                <div className="text-center py-12">
+                                    <TrendingUp size={48} className="mx-auto text-gray-400 mb-4" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">Assessment Score</h3>
+                                    <p className="text-sm text-gray-600 mb-6">
+                                        No assessment has been completed for this opportunity yet.
+                                    </p>
+                                    <button
+                                        onClick={() => navigate(`/score/${id}`)}
+                                        className="bg-blue-600 text-white px-6 py-2 rounded text-sm font-medium hover:bg-blue-700 shadow-sm"
+                                    >
+                                        Start Assessment
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )
+                    }
 
                     {activeTab === 'versions' && (
                         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                            <div className="text-center py-12">
-                                <History size={48} className="mx-auto text-gray-400 mb-4" />
-                                <h3 className="text-lg font-medium text-gray-900 mb-2">Version History</h3>
-                                <p className="text-sm text-gray-600">
-                                    No previous versions available.
-                                </p>
-                            </div>
+                            {history.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <History size={48} className="mx-auto text-gray-400 mb-4" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">Version History</h3>
+                                    <p className="text-sm text-gray-600">
+                                        No previous versions available.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div>
+                                    <h3 className="text-lg font-medium text-gray-900 mb-4">Assessment History</h3>
+                                    <div className="overflow-x-auto">
+                                        <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Version</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted By</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-200">
+                                                {history.map((h, idx) => (
+                                                    <tr key={idx}>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">v{h.version}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(h.created_at).toLocaleString()}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{h.created_by}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600">{h.score}%</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                                                ${h.status === 'APPROVED' ? 'bg-green-100 text-green-800' :
+                                                                    h.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
+                                                                        'bg-yellow-100 text-yellow-800'}`}>
+                                                                {h.status}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
                     {activeTab === 'documents' && (
                         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                            <div className="text-center py-12">
-                                <File size={48} className="mx-auto text-gray-400 mb-4" />
-                                <h3 className="text-lg font-medium text-gray-900 mb-2">Documents</h3>
-                                <p className="text-sm text-gray-600 mb-6">
-                                    No documents have been uploaded for this opportunity.
-                                </p>
-                                <button className="bg-blue-600 text-white px-6 py-2 rounded text-sm font-medium hover:bg-blue-700 shadow-sm">
-                                    Upload Document
-                                </button>
-                            </div>
+                            {history.filter(h => h.attachment_name).length === 0 ? (
+                                <div className="text-center py-12">
+                                    <File size={48} className="mx-auto text-gray-400 mb-4" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">Documents</h3>
+                                    <p className="text-sm text-gray-600 mb-6">
+                                        No documents have been uploaded for this opportunity.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div>
+                                    <h3 className="text-lg font-medium text-gray-900 mb-4">Uploaded Documents</h3>
+                                    <div className="space-y-4">
+                                        {history.filter(h => h.attachment_name).map((h, idx) => (
+                                            <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="bg-blue-100 p-2 rounded">
+                                                        <FileText className="text-blue-600" size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-900">{h.attachment_name}</p>
+                                                        <p className="text-xs text-gray-500">
+                                                            Uploaded in Version {h.version} by {h.created_by} on {new Date(h.created_at).toLocaleDateString()}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <a
+                                                    href={`#`} // Ideally link to actual file download if API supported
+                                                    className="text-sm text-blue-600 font-medium hover:underline"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        alert(`Downloading ${h.attachment_name}... (Mock Action)`);
+                                                    }}
+                                                >
+                                                    Download
+                                                </a>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
-                </div>
-            </div>
-        </div>
+                </div >
+            </div >
+        </div >
     );
 }

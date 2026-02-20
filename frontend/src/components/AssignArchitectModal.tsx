@@ -1,55 +1,86 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, User, Shield, Info } from 'lucide-react';
 
 export interface AssignmentData {
-    sa_owner: string;
+    sa_owner: string;  // This will be the email/ID
     secondary_sa?: string;
     priority: 'High' | 'Medium' | 'Low';
     notes?: string;
+}
+
+interface User {
+    user_id: string;
+    display_name: string;
+    email: string;
 }
 
 interface AssignArchitectModalProps {
     isOpen: boolean;
     onClose: () => void;
     onAssign: (data: AssignmentData) => void;
-    opportunityIds: number[];
+    opportunityIds: (number | string)[]; // Support string IDs
+    targetRole?: string; // SA, PH, SH, SP
+    title?: string;
 }
-
-const SOLUTION_ARCHITECTS = [
-    { id: '1', name: 'Jane Smith', expertise: 'Cloud Infrastructure' },
-    { id: '2', name: 'Michael Chen', expertise: 'Cybersecurity' },
-    { id: '3', name: 'Sarah Johnson', expertise: 'Data Analytics' },
-    { id: '4', name: 'Robert Wilson', expertise: 'AI & ML' },
-    { id: '5', name: 'Emily Davis', expertise: 'Digital Transformation' }
-];
 
 export const AssignArchitectModal: React.FC<AssignArchitectModalProps> = ({
     isOpen,
     onClose,
     onAssign,
-    opportunityIds
+    opportunityIds,
+    targetRole = 'SA',
+    title = 'Assign Solution Architect'
 }) => {
-    const [selectedSA, setSelectedSA] = useState('');
-    const [secondarySA, setSecondarySA] = useState('');
+    const [selectedUser, setSelectedUser] = useState('');
+    const [secondaryUser, setSecondaryUser] = useState('');
     const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('Medium');
     const [notes, setNotes] = useState('');
+    const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch Users from database
+    useEffect(() => {
+        if (isOpen) {
+            setLoading(true);
+            fetch(`http://localhost:8000/api/auth/users`)
+                .then(res => res.json())
+                .then((allUsers: any[]) => {
+                    // Client-side filtering to handle role aliases
+                    const filtered = allUsers.filter(u => {
+                        const roles = u.roles || [];
+                        if (targetRole === 'SH') return roles.includes('SH') || roles.includes('SALES_LEAD') || roles.includes('SALES_HEAD');
+                        if (targetRole === 'PH') return roles.includes('PH') || roles.includes('PRACTICE_HEAD');
+                        if (targetRole === 'GH') return roles.includes('GH') || roles.includes('GLOBAL_HEAD');
+                        if (targetRole === 'SA') return roles.includes('SA') || roles.includes('SOLUTION_ARCHITECT');
+                        if (targetRole === 'SP') return roles.includes('SP') || roles.includes('SALES_PERSON');
+                        return roles.includes(targetRole);
+                    });
+                    setAvailableUsers(filtered);
+                    setLoading(false);
+                })
+                .catch(err => {
+                    console.error('Failed to load users:', err);
+                    setLoading(false);
+                });
+        }
+    }, [isOpen, targetRole]);
 
     if (!isOpen) return null;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedSA) return;
+        if (!selectedUser) return;
 
         onAssign({
-            sa_owner: selectedSA,
-            secondary_sa: secondarySA,
+            sa_owner: selectedUser,
+            secondary_sa: secondaryUser,
             priority,
             notes
         });
 
         // Reset and close
-        setSelectedSA('');
-        setSecondarySA('');
+        setSelectedUser('');
+        setSecondaryUser('');
         setPriority('Medium');
         setNotes('');
         onClose();
@@ -65,8 +96,8 @@ export const AssignArchitectModal: React.FC<AssignArchitectModalProps> = ({
                             <Shield size={20} />
                         </div>
                         <div>
-                            <h2 className="text-lg font-bold text-gray-900 leading-tight">Assign Solution Architect</h2>
-                            <p className="text-xs text-gray-500 mt-0.5">Assigning {opportunityIds.length} deals to technical owner</p>
+                            <h2 className="text-lg font-bold text-gray-900 leading-tight">{title}</h2>
+                            <p className="text-xs text-gray-500 mt-0.5">Assigning {opportunityIds.length} item(s)</p>
                         </div>
                     </div>
                     <button
@@ -79,37 +110,37 @@ export const AssignArchitectModal: React.FC<AssignArchitectModalProps> = ({
 
                 <form onSubmit={handleSubmit}>
                     <div className="p-6 space-y-5">
-                        {/* Primary SA Selection */}
+                        {/* Primary Selection */}
                         <div className="space-y-2">
                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-                                <User size={12} /> Primary Solution Architect
+                                <User size={12} /> Primary Assignee
                             </label>
                             <select
                                 required
-                                value={selectedSA}
-                                onChange={(e) => setSelectedSA(e.target.value)}
+                                value={selectedUser}
+                                onChange={(e) => setSelectedUser(e.target.value)}
                                 className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500/10 focus:border-purple-500 outline-none transition-all"
                             >
-                                <option value="">Select an Architect...</option>
-                                {SOLUTION_ARCHITECTS.map(sa => (
-                                    <option key={sa.id} value={sa.name}>{sa.name} ({sa.expertise})</option>
+                                <option value="">{loading ? 'Loading...' : 'Select User...'}</option>
+                                {availableUsers.map(u => (
+                                    <option key={u.user_id} value={u.user_id}>{u.display_name} ({u.email})</option>
                                 ))}
                             </select>
                         </div>
 
-                        {/* Secondary SA Selection */}
+                        {/* Secondary Selection (Only for SA really, but keeping it) */}
                         <div className="space-y-2">
                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-                                Secondary / Peer Reviewer (Optional)
+                                Secondary (Optional)
                             </label>
                             <select
-                                value={secondarySA}
-                                onChange={(e) => setSecondarySA(e.target.value)}
+                                value={secondaryUser}
+                                onChange={(e) => setSecondaryUser(e.target.value)}
                                 className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500/10 focus:border-purple-500 outline-none transition-all"
                             >
                                 <option value="">None</option>
-                                {SOLUTION_ARCHITECTS.filter(sa => sa.name !== selectedSA).map(sa => (
-                                    <option key={sa.id} value={sa.name}>{sa.name} ({sa.expertise})</option>
+                                {availableUsers.filter(u => u.user_id !== selectedUser).map(u => (
+                                    <option key={u.user_id} value={u.user_id}>{u.display_name} ({u.email})</option>
                                 ))}
                             </select>
                         </div>
@@ -125,8 +156,8 @@ export const AssignArchitectModal: React.FC<AssignArchitectModalProps> = ({
                                             type="button"
                                             onClick={() => setPriority(p)}
                                             className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-all ${priority === p
-                                                    ? 'bg-purple-50 border-purple-200 text-purple-700 ring-2 ring-purple-500/5'
-                                                    : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'
+                                                ? 'bg-purple-50 border-purple-200 text-purple-700 ring-2 ring-purple-500/5'
+                                                : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'
                                                 }`}
                                         >
                                             {p}
@@ -145,12 +176,12 @@ export const AssignArchitectModal: React.FC<AssignArchitectModalProps> = ({
 
                         <div className="space-y-2">
                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-                                <Info size={12} /> Architect Instructions
+                                <Info size={12} /> Instructions
                             </label>
                             <textarea
                                 value={notes}
                                 onChange={(e) => setNotes(e.target.value)}
-                                placeholder="Add specific guidance or context for the assessment..."
+                                placeholder="Add specific guidance or context..."
                                 className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-sm h-24 focus:ring-2 focus:ring-purple-500/10 focus:border-purple-500 outline-none transition-all resize-none"
                             />
                         </div>
@@ -167,10 +198,10 @@ export const AssignArchitectModal: React.FC<AssignArchitectModalProps> = ({
                         </button>
                         <button
                             type="submit"
-                            disabled={!selectedSA}
-                            className={`flex-1 px-4 py-2.5 text-sm font-bold text-white rounded-lg shadow-sm transition-all ${!selectedSA
-                                    ? 'bg-purple-300 cursor-not-allowed'
-                                    : 'bg-purple-600 hover:bg-purple-700 hover:shadow-md active:scale-[0.98]'
+                            disabled={!selectedUser}
+                            className={`flex-1 px-4 py-2.5 text-sm font-bold text-white rounded-lg shadow-sm transition-all ${!selectedUser
+                                ? 'bg-purple-300 cursor-not-allowed'
+                                : 'bg-purple-600 hover:bg-purple-700 hover:shadow-md active:scale-[0.98]'
                                 }`}
                         >
                             Confirm Allocation
