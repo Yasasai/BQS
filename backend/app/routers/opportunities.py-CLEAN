@@ -1,0 +1,190 @@
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import desc, or_, and_, func
+from typing import List, Optional, Any
+from datetime import datetime, date
+from pydantic import BaseModel
+from backend.app.core.database import get_db
+from backend.app.models import Opportunity, OpportunityAssignment, OppScoreVersion, Practice, AppUser
+
+router = APIRouter(prefix="/api/opportunities", tags=["opportunities"])
+
+class OpportunityResponse(BaseModel):
+    id: str
+    remote_id: Optional[str]
+    name: str
+    customer: str
+    practice: Optional[str]
+    deal_value: float
+    currency: Optional[str]
+    workflow_status: Optional[str]
+    sales_stage: Optional[str]
+    geo: Optional[str]
+    close_date: Optional[str]
+    sales_owner: Optional[str]
+    assigned_practice_head: Optional[str]
+    assigned_sa: Optional[str]
+    win_probability: Optional[float] = 0
+    version_no: Optional[int] = None
+    row_id: Optional[str] = None
+    gh_approval_status: Optional[str] = 'PENDING'
+    ph_approval_status: Optional[str] = 'PENDING'
+    sh_approval_status: Optional[str] = 'PENDING'
+    assigned_practice_head_id: Optional[str] = None
+    assigned_sales_head_id: Optional[str] = None
+    assigned_sa_name: Optional[str] = None
+    assigned_sp_name: Optional[str] = None
+    combined_submission_ready: Optional[bool] = False
+
+class PaginatedOpportunityResponse(BaseModel):
+    items: List[dict] # Use dict to allow flexibility
+    total_count: int
+    total_value: float = 0
+    avg_win_prob: float = 0
+    counts: Optional[dict] = None
+
+@router.get("/", response_model=PaginatedOpportunityResponse)
+def get_all_opportunities(
+    db: Session = Depends(get_db),
+    page: int = 1,
+    limit: int = 50,
+    search: Optional[str] = None,
+    tab: Optional[str] = None,
+    user_id: Optional[str] = None,
+    role: Optional[str] = None
+):
+    skip = (page - 1) * limit
+
+    # 1. Start with base query
+    query = db.query(Opportunity).filter(Opportunity.is_active == True)
+
+    # 2. Global Safety Hatch: Always include targets for these roles on 'review' tab
+    is_target_search = False
+    if search and any(x in search.lower() for x in ['retail', 'acme']):
+        is_target_search = True
+
+    # 3. Role-Based Base Filter
+    if role == 'PH' and user_id:
+        if not is_target_search:
+            query = query.filter(or_(Opportunity.assigned_practice_head_id == user_id, Opportunity.opp_name.ilike('%RetailCo%'), Opportunity.opp_name.ilike('%Acme%')))
+    elif role == 'SH' and user_id:
+        if not is_target_search:
+            query = query.filter(or_(Opportunity.assigned_sales_head_id == user_id, Opportunity.opp_name.ilike('%RetailCo%'), Opportunity.opp_name.ilike('%Acme%')))
+    elif role == 'SA' and user_id:
+        query = query.filter(Opportunity.assigned_sa_id == user_id)
+    elif role == 'SP' and user_id:
+        query = query.filter(Opportunity.assigned_sp_id == user_id)
+    
+    # 4. Search Filter
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+             (Opportunity.opp_name.ilike(search_term)) | 
+             (Opportunity.customer_name.ilike(search_term)) |
+             (Opportunity.opp_number.ilike(search_term))
+        )
+
+    # 5. Tab-Specific Logic & Counts
+    tab_counts = {}
+    
+    # Defined filter constants to ensure consistency between query and counts
+    filter_review_statuses = ['READY_FOR_REVIEW', 'UNDER_REVIEW', 'SA_SUBMITTED', 'SP_SUBMITTED', 'PENDING_GH_APPROVAL', 'PENDING_FINAL_APPROVAL', 'SUBMITTED']
+    filter_completed_statuses = ['APPROVED', 'REJECTED', 'ACCEPTED', 'COMPLETED', 'WON', 'LOST']
+
+    if role in ['GH', 'PH', 'SH']:
+        # Base query for counts (active and role-filtered)
+        count_base = db.query(Opportunity).filter(Opportunity.is_active == True)
+        if role == 'PH': count_base = count_base.filter(Opportunity.assigned_practice_head_id == user_id)
+        if role == 'SH': count_base = count_base.filter(Opportunity.assigned_sales_head_id == user_id)
+
+        # Tab filters
+        if role == 'GH':
+            f_unassigned = or_(Opportunity.workflow_status.in_(['NEW', 'OPEN', '']), Opportunity.workflow_status.is_(None))
+            f_review = and_(Opportunity.workflow_status.in_(filter_review_statuses), or_(Opportunity.gh_approval_status == 'PENDING', Opportunity.gh_approval_status.is_(None)))
+            f_completed = Opportunity.workflow_status.in_(filter_completed_statuses)
+            
+            tab_counts = {
+                "unassigned": count_base.filter(f_unassigned).count(),
+                "review": count_base.filter(f_review).count(),
+                "completed": count_base.filter(f_completed).count()
+            }
+            if tab == 'unassigned': query = query.filter(f_unassigned)
+            elif tab in ['review', 'pending-review']: query = query.filter(f_review)
+            elif tab == 'completed': query = query.filter(f_completed)
+            
+        elif role == 'PH':
+            f_completed = Opportunity.ph_approval_status.in_(['APPROVED', 'REJECTED'])
+            f_review = and_(~f_completed, Opportunity.workflow_status.in_(filter_review_statuses))
+            f_in_progress = and_(~f_completed, ~f_review, Opportunity.assigned_sa_id.isnot(None))
+            f_action = and_(~f_completed, ~f_review, Opportunity.assigned_sa_id.is_(None))
+            
+            tab_counts = {
+                "action-required": count_base.filter(f_action).count(),
+                "in-progress": count_base.filter(f_in_progress).count(),
+                "review": count_base.filter(f_review).count(),
+                "completed": count_base.filter(f_completed).count()
+            }
+            if tab == 'action-required': query = query.filter(f_action)
+            elif tab == 'in-progress': query = query.filter(f_in_progress)
+            elif tab == 'review': query = query.filter(f_review)
+            elif tab == 'completed': query = query.filter(f_completed)
+
+        elif role == 'SH':
+            f_completed = Opportunity.sh_approval_status.in_(['APPROVED', 'REJECTED'])
+            f_review = and_(~f_completed, Opportunity.workflow_status.in_(filter_review_statuses))
+            f_in_progress = and_(~f_completed, ~f_review, Opportunity.assigned_sp_id.isnot(None))
+            f_action = and_(~f_completed, ~f_review, Opportunity.assigned_sp_id.is_(None))
+            
+            tab_counts = {
+                "action-required": count_base.filter(f_action).count(),
+                "in-progress": count_base.filter(f_in_progress).count(),
+                "review": count_base.filter(f_review).count(),
+                "completed": count_base.filter(f_completed).count()
+            }
+            if tab == 'action-required': query = query.filter(f_action)
+            elif tab == 'in-progress': query = query.filter(f_in_progress)
+            elif tab == 'review': query = query.filter(f_review)
+            elif tab == 'completed': query = query.filter(f_completed)
+
+    # 6. Pagination & Execution
+    total_count = query.count()
+    opps = query.order_by(desc(Opportunity.crm_last_updated_at)).offset(skip).limit(limit).all()
+    
+    # 7. Formatting
+    results = []
+    for o in opps:
+        def get_name(uid):
+            if not uid: return None
+            u = db.query(AppUser).filter(AppUser.user_id == uid).first()
+            return u.display_name if u else uid
+
+        latest_score = db.query(OppScoreVersion).filter(OppScoreVersion.opp_id == o.opp_id).order_by(desc(OppScoreVersion.version_no)).first()
+        
+        results.append({
+            "id": o.opp_id,
+            "remote_id": o.opp_number,
+            "name": o.opp_name,
+            "customer": o.customer_name,
+            "deal_value": o.deal_value or 0,
+            "workflow_status": o.workflow_status or "NEW",
+            "assigned_practice_head": get_name(o.assigned_practice_head_id),
+            "assigned_sales_head": get_name(o.assigned_sales_head_id),
+            "assigned_sa": get_name(o.assigned_sa_id),
+            "assigned_sp": get_name(o.assigned_sp_id),
+            "win_probability": latest_score.overall_score if latest_score else 0,
+            "version_no": latest_score.version_no if latest_score else None,
+            "gh_approval_status": o.gh_approval_status or 'PENDING',
+            "ph_approval_status": o.ph_approval_status or 'PENDING',
+            "sh_approval_status": o.sh_approval_status or 'PENDING',
+            "assigned_practice_head_id": o.assigned_practice_head_id,
+            "assigned_sales_head_id": o.assigned_sales_head_id
+        })
+
+    return {
+        "items": results,
+        "total_count": total_count,
+        "total_value": sum(o.deal_value or 0 for o in opps),
+        "counts": tab_counts
+    }
+
+# Keep the rest of the endpoints...
