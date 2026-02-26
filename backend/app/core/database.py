@@ -12,8 +12,21 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Abcd1234@127.0.0
 def init_db():
     """Checks if DB exists, creates it if not, and seeds initial data."""
     try:
+        # Get connection parameters from environment or default
+        db_host = os.getenv("DB_HOST", "127.0.0.1")
+        db_user = os.getenv("DB_USER", "postgres")
+        db_pass = os.getenv("DB_PASSWORD", "Abcd1234")
+        db_port = os.getenv("DB_PORT", "5432")
+
         # Connect to default 'postgres' db to check if 'bqs' exists
-        conn = psycopg2.connect(dbname='postgres', user='postgres', host='127.0.0.1', password='Abcd1234', port=5432, connect_timeout=5)
+        conn = psycopg2.connect(
+            dbname='postgres', 
+            user=db_user, 
+            host=db_host, 
+            password=db_pass, 
+            port=db_port, 
+            connect_timeout=5
+        )
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         with conn.cursor() as cur:
             cur.execute("SELECT 1 FROM pg_catalog.pg_database WHERE datname = 'bqs'")

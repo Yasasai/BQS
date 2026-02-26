@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Opportunity } from '../types';
@@ -45,7 +46,7 @@ export function SolutionArchitectDashboard() {
     useEffect(() => {
         const endpoints = ['regions', 'practices', 'stages', 'statuses'];
         endpoints.forEach(end => {
-            fetch(`http://localhost:8000/api/opportunities/metadata/${end}`)
+            fetch(``${API_URL}`/opportunities/metadata/${end}`)
                 .then(res => res.json())
                 .then(data => {
                     if (end === 'regions') setAllRegions(data);
@@ -95,7 +96,7 @@ export function SolutionArchitectDashboard() {
         if (debouncedSearch) params.append('search', debouncedSearch);
         if (columnFilters.length > 0) params.append('filters', JSON.stringify(columnFilters));
 
-        fetch(`http://localhost:8000/api/opportunities/?${params}`)
+        fetch(``${API_URL}`/opportunities/?${params}`)
             .then(res => {
                 if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
                 return res.json();
@@ -127,7 +128,7 @@ export function SolutionArchitectDashboard() {
 
     const handleStartAssessment = async (oppId: string) => {
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${oppId}/start-assessment`, {
+            const response = await fetch(``${API_URL}`/opportunities/${oppId}/start-assessment`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sa_name: user?.name })

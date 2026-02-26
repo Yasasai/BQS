@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=Abcd1234
+      - POSTGRES_DB=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - bqs-network
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://postgres:Abcd1234@db:5432/bqs
+      - DB_HOST=db
+      - DB_USER=postgres
+      - DB_PASSWORD=Abcd1234
+      - DB_PORT=5432
+      - ORACLE_BASE_URL=${ORACLE_BASE_URL}
+      - ORACLE_USER=${ORACLE_USER}
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      - ORACLE_API_VERSION=${ORACLE_API_VERSION}
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    networks:
+      - bqs-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - bqs-network
+
+networks:
+  bqs-network:
+    driver: bridge
+
+volumes:
+  pgdata:

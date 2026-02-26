@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TopBar } from '../components/TopBar';
@@ -94,7 +95,7 @@ export const PracticeHeadReview = () => {
 
     const fetchSubmittedAssessments = async () => {
         try {
-            const response = await fetch('http://localhost:8000/api/opportunities');
+            const response = await fetch('`${API_URL}`/opportunities');
             const data = await response.json();
 
             // Filter for opportunities awaiting PH approval
@@ -128,7 +129,7 @@ export const PracticeHeadReview = () => {
 
     const handleAcceptScore = async (oppId: number) => {
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${oppId}/accept-score`, {
+            const response = await fetch(``${API_URL}`/opportunities/${oppId}/accept-score`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -153,7 +154,7 @@ export const PracticeHeadReview = () => {
         if (!reason) return; // User cancelled
 
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${oppId}/reject-score`, {
+            const response = await fetch(``${API_URL}`/opportunities/${oppId}/reject-score`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

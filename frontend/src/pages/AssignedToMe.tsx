@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useEffect, useState } from 'react';
 import { Opportunity } from '../types';
 import { TopBar } from '../components/TopBar';
@@ -30,7 +31,7 @@ export function AssignedToMe() {
 
     const fetchAssignedOpportunities = () => {
         setLoading(true);
-        fetch('http://localhost:8000/api/opportunities')
+        fetch('`${API_URL}`/opportunities')
             .then(res => res.json())
             .then(data => {
                 // Filter only assigned opportunities (those with sales_owner)
@@ -320,7 +321,7 @@ export function AssignedToMe() {
                                                     onClick={async (e) => {
                                                         e.stopPropagation();
                                                         try {
-                                                            const response = await fetch(`http://localhost:8000/api/opportunities/${opp.id}/send-to-practice-head`, {
+                                                            const response = await fetch(``${API_URL}`/opportunities/${opp.id}/send-to-practice-head`, {
                                                                 method: 'POST',
                                                                 headers: { 'Content-Type': 'application/json' },
                                                                 body: JSON.stringify({

@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Opportunity } from '../types';
@@ -54,7 +55,7 @@ export function ManagementDashboard() {
     useEffect(() => {
         const endpoints = ['regions', 'practices', 'stages', 'statuses'];
         endpoints.forEach(end => {
-            fetch(`http://localhost:8000/api/opportunities/metadata/${end}`)
+            fetch(``${API_URL}`/opportunities/metadata/${end}`)
                 .then(res => res.json())
                 .then(data => {
                     if (end === 'regions') setAllRegions(data);
@@ -105,7 +106,7 @@ export function ManagementDashboard() {
         if (debouncedSearch) params.append('search', debouncedSearch);
         if (columnFilters.length > 0) params.append('filters', JSON.stringify(columnFilters));
 
-        fetch(`http://localhost:8000/api/opportunities/?${params}`)
+        fetch(``${API_URL}`/opportunities/?${params}`)
             .then(res => res.json())
             .then(data => {
                 if (data.items && Array.isArray(data.items)) {
@@ -141,7 +142,7 @@ export function ManagementDashboard() {
 
         try {
             await Promise.all(idsToAssign.map(id =>
-                fetch(`http://localhost:8000/api/opportunities/${id}/assign`, {
+                fetch(``${API_URL}`/opportunities/${id}/assign`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -177,7 +178,7 @@ export function ManagementDashboard() {
 
         try {
             await Promise.all(approvalIds.map(id =>
-                fetch(`http://localhost:8000/api/opportunities/${id}/approve`, {
+                fetch(``${API_URL}`/opportunities/${id}/approve`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

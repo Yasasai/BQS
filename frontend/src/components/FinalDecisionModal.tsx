@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useState } from 'react';
 import { Opportunity } from '../types';
 import { X, CheckCircle, XCircle, AlertCircle, FileText } from 'lucide-react';
@@ -23,7 +24,7 @@ export const FinalDecisionModal: React.FC<Props> = ({ opportunity, isOpen, onClo
 
         setIsSubmitting(true);
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${opportunity.id}/final-decision`, {
+            const response = await fetch(``${API_URL}`/opportunities/${opportunity.id}/final-decision`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

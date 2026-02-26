@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
@@ -69,7 +70,7 @@ export const ScoreOpportunity: React.FC = () => {
 
             try {
                 // 1. Fetch Opportunity Context
-                const d = await axios.get(`http://localhost:8000/api/inbox/${id}`);
+                const d = await axios.get(``${API_URL}`/inbox/${id}`);
                 setOpp(d.data);
                 if (d.data.close_date) {
                     setDeadline(new Date(d.data.close_date).toISOString().split('T')[0]);
@@ -81,7 +82,7 @@ export const ScoreOpportunity: React.FC = () => {
                 if (isExecutor && !forcedVersion) params.append('user_id', user?.id || '');
                 if (forcedVersion) params.append('version', forcedVersion);
 
-                const s = await axios.get(`http://localhost:8000/api/scoring/${id}/latest?${params.toString()}`);
+                const s = await axios.get(``${API_URL}`/scoring/${id}/latest?${params.toString()}`);
                 const currentStatus = s.data.status;
 
                 if (currentStatus !== "NOT_STARTED") {
@@ -116,7 +117,7 @@ export const ScoreOpportunity: React.FC = () => {
                     if (isReady && isApprover) {
                         try {
                             const cParams = forcedVersion ? `?version_no=${forcedVersion}` : '';
-                            const c = await axios.get(`http://localhost:8000/api/scoring/${id}/combined-review${cParams}`);
+                            const c = await axios.get(``${API_URL}`/scoring/${id}/combined-review${cParams}`);
                             setCombinedData(c.data);
                         } catch (e) { console.warn("Could not fetch combined data", e); }
                     }
@@ -130,7 +131,7 @@ export const ScoreOpportunity: React.FC = () => {
                 }
 
                 // 3. Fetch History
-                const h = await axios.get(`http://localhost:8000/api/scoring/${id}/history`);
+                const h = await axios.get(``${API_URL}`/scoring/${id}/history`);
                 setHistory(h.data);
 
             } catch (err) {
@@ -192,7 +193,7 @@ export const ScoreOpportunity: React.FC = () => {
             };
 
             const endpoint = isSubmit ? 'submit' : 'draft';
-            await axios.post(`http://localhost:8000/api/scoring/${id}/${endpoint}`, payload);
+            await axios.post(``${API_URL}`/scoring/${id}/${endpoint}`, payload);
 
             alert(isSubmit ? "Assessment Submitted Successfully!" : "Draft Saved.");
             navigate('/assigned-to-me');
@@ -215,7 +216,7 @@ export const ScoreOpportunity: React.FC = () => {
         if (!id || !approvalAction) return;
         setIsSaving(true);
         try {
-            await axios.post(`http://localhost:8000/api/opportunities/${id}/approve`, {
+            await axios.post(``${API_URL}`/opportunities/${id}/approve`, {
                 role: user?.role,
                 decision: approvalAction,
                 user_id: user?.id,
@@ -236,7 +237,7 @@ export const ScoreOpportunity: React.FC = () => {
         if (!confirm("Starting a new version will copy data from the latest version. Proceed?")) return;
         setIsSaving(true);
         try {
-            await axios.post(`http://localhost:8000/api/scoring/${id}/new-version`);
+            await axios.post(``${API_URL}`/scoring/${id}/new-version`);
             alert("New Version Created.");
             window.location.reload();
         } catch (err) {
@@ -252,7 +253,7 @@ export const ScoreOpportunity: React.FC = () => {
             const formData = new FormData();
             formData.append("file", file);
             try {
-                const res = await axios.post('http://localhost:8000/api/upload', formData);
+                const res = await axios.post('`${API_URL}`/upload', formData);
                 setAttachmentName(res.data.filename);
             } catch (err) {
                 alert("Upload failed.");

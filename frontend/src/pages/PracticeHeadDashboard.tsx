@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Opportunity } from '../types';
@@ -51,7 +52,7 @@ export function PracticeHeadDashboard() {
     useEffect(() => {
         const endpoints = ['regions', 'practices', 'stages', 'statuses'];
         endpoints.forEach(end => {
-            fetch(`http://localhost:8000/api/opportunities/metadata/${end}`)
+            fetch(``${API_URL}`/opportunities/metadata/${end}`)
                 .then(res => res.json())
                 .then(data => {
                     if (end === 'regions') setAllRegions(data);
@@ -114,7 +115,7 @@ export function PracticeHeadDashboard() {
         if (debouncedSearch) params.append('search', debouncedSearch);
         if (columnFilters.length > 0) params.append('filters', JSON.stringify(columnFilters));
 
-        fetch(`http://localhost:8000/api/opportunities/?${params}`)
+        fetch(``${API_URL}`/opportunities/?${params}`)
             .then(res => {
                 if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
                 return res.json();
@@ -141,7 +142,7 @@ export function PracticeHeadDashboard() {
         const idsToAssign = Array.isArray(oppIds) ? oppIds : [oppIds];
         try {
             await Promise.all(idsToAssign.map(id =>
-                fetch(`http://localhost:8000/api/opportunities/${id}/assign`, {
+                fetch(``${API_URL}`/opportunities/${id}/assign`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -177,7 +178,7 @@ export function PracticeHeadDashboard() {
 
         try {
             await Promise.all(approvalIds.map(id =>
-                fetch(`http://localhost:8000/api/opportunities/${id}/approve`, {
+                fetch(``${API_URL}`/opportunities/${id}/approve`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
