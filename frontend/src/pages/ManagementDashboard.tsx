@@ -11,7 +11,7 @@ import { AssignArchitectModal, AssignmentData } from '../components/AssignArchit
 import { MultiSelect } from '../components/MultiSelect';
 import { useAuth } from '../context/AuthContext';
 
-type TabType = 'all' | 'action-required' | 'unassigned' | 'missing-ph' | 'missing-sh' | 'in-progress' | 'review' | 'completed';
+type TabType = 'all' | 'action-required' | 'unassigned' | 'missing-ph' | 'missing-sh' | 'fully-assigned' | 'partially-assigned' | 'in-progress' | 'review' | 'completed';
 
 const TAB_LABELS: Record<string, string> = {
     'all': 'All Opportunities',
@@ -19,6 +19,8 @@ const TAB_LABELS: Record<string, string> = {
     'unassigned': 'Fully Unassigned',
     'missing-ph': 'Missing PH',
     'missing-sh': 'Missing SH',
+    'fully-assigned': 'Fully Assigned',
+    'partially-assigned': 'Partially Assigned',
     'in-progress': 'In Progress',
     'review': 'Under Review',
     'completed': 'Completed'

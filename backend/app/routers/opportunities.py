@@ -200,6 +200,15 @@ def get_all_opportunities(
             tab_filters.append(and_(Opportunity.workflow_status.notin_(comp_stats + rev_stats), Opportunity.assigned_practice_head_id.is_(None), Opportunity.assigned_sales_head_id.isnot(None)))
         elif t == 'missing-sh' and role == 'GH':
             tab_filters.append(and_(Opportunity.workflow_status.notin_(comp_stats + rev_stats), Opportunity.assigned_sales_head_id.is_(None), Opportunity.assigned_practice_head_id.isnot(None)))
+        elif t == 'fully-assigned' and role == 'GH':
+            tab_filters.append(and_(Opportunity.workflow_status.notin_(comp_stats + rev_stats), Opportunity.assigned_practice_head_id.isnot(None), Opportunity.assigned_sales_head_id.isnot(None)))
+        elif t == 'partially-assigned' and role == 'GH':
+            # Missing PH or SH, but not both (which is unassigned)
+            cond = or_(
+                and_(Opportunity.assigned_practice_head_id.is_(None), Opportunity.assigned_sales_head_id.isnot(None)),
+                and_(Opportunity.assigned_practice_head_id.isnot(None), Opportunity.assigned_sales_head_id.is_(None))
+            )
+            tab_filters.append(and_(Opportunity.workflow_status.notin_(comp_stats + rev_stats), cond))
         elif t in ['action-required', 'unassigned', 'needs-action']:
             # Action Required means: Outstanding task for THIS role
             tf = (or_(Opportunity.workflow_status.notin_(comp_stats + rev_stats), Opportunity.workflow_status.is_(None)))
@@ -302,6 +311,8 @@ def get_all_opportunities(
             "unassigned": base_role.filter(and_(f_open, f_no_ph, f_no_sh)).count(),
             "missing-ph": base_role.filter(and_(f_open, f_no_ph, ~f_no_sh)).count(),
             "missing-sh": base_role.filter(and_(f_open, ~f_no_ph, f_no_sh)).count(),
+            "partially-assigned": base_role.filter(and_(f_open, or_(and_(f_no_ph, ~f_no_sh), and_(~f_no_ph, f_no_sh)))).count(),
+            "fully-assigned": base_role.filter(and_(f_open, ~f_no_ph, ~f_no_sh)).count(),
             "review": base_role.filter(f_rev).count(),
             "pending-review": base_role.filter(f_rev).count(),
             "completed": base_role.filter(f_comp).count()
