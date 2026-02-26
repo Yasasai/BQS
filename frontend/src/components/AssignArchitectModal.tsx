@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import { X, User, Shield, Info } from 'lucide-react';
 
@@ -42,7 +43,7 @@ export const AssignArchitectModal: React.FC<AssignArchitectModalProps> = ({
     useEffect(() => {
         if (isOpen) {
             setLoading(true);
-            fetch(`http://localhost:8000/api/auth/users`)
+            fetch(``${API_URL}`/auth/users`)
                 .then(res => res.json())
                 .then((allUsers: any[]) => {
                     // Client-side filtering to handle role aliases

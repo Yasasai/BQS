@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Opportunity } from '../types';
@@ -41,7 +42,7 @@ export function OpportunityDetail() {
 
     const fetchOpportunityDetail = (oppId: string) => {
         setLoading(true);
-        fetch(`http://localhost:8000/api/opportunities/${oppId}`)
+        fetch(``${API_URL}`/opportunities/${oppId}`)
             .then(res => res.json())
             .then(data => {
                 setOpportunity(data);
@@ -54,7 +55,7 @@ export function OpportunityDetail() {
     };
 
     const fetchHistory = (oppId: string) => {
-        fetch(`http://localhost:8000/api/scoring/${oppId}/history`)
+        fetch(``${API_URL}`/scoring/${oppId}/history`)
             .then(res => res.json())
             .then(data => setHistory(data))
             .catch(err => console.error("Failed to fetch history", err));

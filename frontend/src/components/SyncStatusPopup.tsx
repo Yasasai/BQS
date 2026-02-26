@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 
 import React, { useState, useEffect } from 'react';
 import { RefreshCcw, AlertCircle, CheckCircle, Clock, X, Terminal } from 'lucide-react';
@@ -20,7 +21,7 @@ export const SyncStatusPopup: React.FC<{ isOpen: boolean; onClose: () => void }>
     const fetchLogs = async () => {
         setLoading(true);
         try {
-            const response = await fetch('http://localhost:8000/api/v1/sync-logs');
+            const response = await fetch('`${API_URL}`/v1/sync-logs');
             const data = await response.json();
             setLogs(data);
         } catch (error) {
@@ -32,7 +33,7 @@ export const SyncStatusPopup: React.FC<{ isOpen: boolean; onClose: () => void }>
 
     const triggerSync = async () => {
         try {
-            await fetch('http://localhost:8000/api/v1/sync-crm', { method: 'POST' });
+            await fetch('`${API_URL}`/v1/sync-crm', { method: 'POST' });
             alert('Sync triggered! Refresh logs in a few seconds.');
             fetchLogs();
         } catch (error) {

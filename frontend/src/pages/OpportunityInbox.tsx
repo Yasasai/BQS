@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
@@ -21,7 +22,7 @@ export const OpportunityInbox: React.FC = () => {
         try {
             const isLead = currentUser.roles.includes("SALES_LEAD");
             const endpoint = isLead ? "unassigned" : "my-assignments";
-            const url = `http://localhost:8000/api/inbox/${endpoint}${!isLead ? `?user_id=${currentUser.user_id}` : ''}`;
+            const url = ``${API_URL}`/inbox/${endpoint}${!isLead ? `?user_id=${currentUser.user_id}` : ''}`;
 
             const res = await axios.get(url);
             setOpps(res.data);

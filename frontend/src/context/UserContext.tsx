@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
@@ -29,7 +30,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        fetch('http://localhost:8000/api/auth/users')
+        fetch('`${API_URL}`/auth/users')
             .then(res => res.json())
             .then(data => {
                 setAvailableUsers(data);

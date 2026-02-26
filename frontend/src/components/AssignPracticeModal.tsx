@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useState } from 'react';
 import { Opportunity } from '../types';
 import { X, ChevronRight } from 'lucide-react';
@@ -22,7 +23,7 @@ export const AssignPracticeModal: React.FC<Props> = ({ opportunity, isOpen, onCl
         setIsSubmitting(true);
 
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${opportunity.id}/assign-practice`, {
+            const response = await fetch(``${API_URL}`/opportunities/${opportunity.id}/assign-practice`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ practice: selectedPractice }),

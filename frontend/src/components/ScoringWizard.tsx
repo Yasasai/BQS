@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useState } from 'react';
 import { Opportunity } from '../types';
 import { ChevronLeft, ChevronRight, Save, Send, AlertTriangle } from 'lucide-react';
@@ -37,7 +38,7 @@ export const ScoringWizard: React.FC<Props> = ({ opportunity, onClose, onSuccess
         const finalScore = calculateFinalScore();
 
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${opportunity.id}/submit-assessment`, {
+            const response = await fetch(``${API_URL}`/opportunities/${opportunity.id}/submit-assessment`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

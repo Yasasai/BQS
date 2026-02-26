@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TopBar } from '../components/TopBar';
@@ -33,7 +34,7 @@ export const LeadershipDashboard = () => {
     const fetchSubmittedAssessments = async () => {
         try {
             // TODO: Replace with actual API call
-            // const response = await fetch('http://localhost:8000/api/assessments/submitted');
+            // const response = await fetch('`${API_URL}`/assessments/submitted');
             // const data = await response.json();
 
             // Mock data for now
