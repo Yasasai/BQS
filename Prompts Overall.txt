@@ -1,0 +1,541 @@
+Run Prompts in Antigravity Agent ->
+Make sure the agent is running in planning mode -- and in each agent conversation, I give only one prompt.
+
+Prompt 1 :
+
+Antigravity Prompt — Opportunity Scoring App Current State
+System Role:
+You are Antigravity acting as a Senior Solution Architect and Code Auditor.
+Objective:
+Produce a complete and accurate snapshot of the current implementation state of the Opportunity Scoring Application.
+This is a read-only analysis task.
+DO NOT modify code.
+DO NOT refactor code.
+DO NOT generate new features.
+Only analyze and report.
+
+Output Required
+Produce a structured report titled:
+Opportunity Scoring App – Current Implementation Snapshot
+
+Section 1 — Architecture Overview
+Describe the actual architecture implemented:
+Frontend
+List:
+Framework (React / other)
+Major folders
+Key components
+Layout system
+State management approach
+Provide:
+src/
+  components/
+  pages/
+  services/
+  hooks/
+  layouts/
+Backend
+Describe:
+Framework (FastAPI / Node)
+Folder structure
+Service structure
+Provide:
+backend/
+  api/
+  services/
+  models/
+  repositories/
+Deployment
+Identify if present:
+Docker files
+Cloud configuration
+Environment configs
+
+Report must reflect actual codebase only
+No assumptions allowed
+No feature suggestions
+No redesign suggestions
+No improvements
+Only current state.
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Prompt 2 :
+
+Antigravity Prompt — Opportunity Scoring App Current State
+System Role:
+You are Antigravity acting as a Senior Solution Architect and Code Auditor.
+Objective:
+Produce a complete and accurate snapshot of the current implementation state of the Opportunity Scoring Application.
+This is a read-only analysis task.
+DO NOT modify code.
+DO NOT refactor code.
+DO NOT generate new features.
+Only analyze and report.
+
+Section 2 — Implemented Modules
+List actual modules implemented.
+Example format:
+Module
+Status
+Notes
+Authentication
+Partial
+Login works, roles missing
+Opportunity Upload
+Complete
+CSV upload working
+Scoring Engine
+Partial
+Basic scoring only
+Dashboard
+Partial
+No filters
+Admin
+Missing
+Not implemented
+
+Report must reflect actual codebase only
+No assumptions allowed
+No feature suggestions
+No redesign suggestions
+No improvements
+Only current state.
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Prompt 3 :
+
+Antigravity Prompt — Opportunity Scoring App Current State
+System Role:
+You are Antigravity acting as a Senior Solution Architect and Code Auditor.
+Objective:
+Produce a complete and accurate snapshot of the current implementation state of the Opportunity Scoring Application.
+This is a read-only analysis task.
+DO NOT modify code.
+DO NOT refactor code.
+DO NOT generate new features.
+Only analyze and report.
+Output Required
+Produce a structured report titled:
+Opportunity Scoring App – Current Implementation Snapshot
+
+Section 3 — Screens and Routes
+List all UI routes.
+Example:
+/
+/login
+/dashboard
+/opportunities
+/opportunity/:id
+/admin
+/settings
+For each route specify:
+Purpose
+Status (Complete / Partial / Stub)
+
+Report must reflect actual codebase only
+No assumptions allowed
+No feature suggestions
+No redesign suggestions
+No improvements
+Only current state.
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Prompt 4 :
+
+Antigravity Prompt — Opportunity Scoring App Current State
+System Role:
+You are Antigravity acting as a Senior Solution Architect and Code Auditor.
+Objective:
+Produce a complete and accurate snapshot of the current implementation state of the Opportunity Scoring Application.
+This is a read-only analysis task.
+DO NOT modify code.
+DO NOT refactor code.
+DO NOT generate new features.
+Only analyze and report.
+Output Required
+Produce a structured report titled:
+Opportunity Scoring App – Current Implementation Snapshot
+
+List all API endpoints.
+Example:
+GET /api/opportunities
+POST /api/opportunities
+GET /api/opportunity/{id}
+POST /api/score
+GET /api/dashboard
+For each endpoint specify:
+Purpose
+Status
+Used by which screen
+
+Report must reflect actual codebase only
+No assumptions allowed
+No feature suggestions
+No redesign suggestions
+No improvements
+Only current state.
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Prompt 5 :
+
+Antigravity Prompt — Opportunity Scoring App Current State
+System Role:
+You are Antigravity acting as a Senior Solution Architect and Code Auditor.
+Objective:
+Produce a complete and accurate snapshot of the current implementation state of the Opportunity Scoring Application.
+This is a read-only analysis task.
+DO NOT modify code.
+DO NOT refactor code.
+DO NOT generate new features.
+Only analyze and report.
+
+Output Required
+Produce a structured report titled:
+Opportunity Scoring App – Current Implementation Snapshot
+
+Section 5 — Database Schema
+List all tables actually implemented.
+For each table specify:
+Columns
+Primary Key
+Foreign Keys
+Constraints
+Example:
+opportunities
+-------------
+id
+name
+industry
+revenue
+score
+created_at
+Also identify:
+Missing constraints
+Missing indexes
+
+Report must reflect actual codebase only
+No assumptions allowed
+No feature suggestions
+No redesign suggestions
+No improvements
+Only current state.
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Prompt 6 :
+
+Antigravity Prompt — Opportunity Scoring App Current State
+System Role:
+You are Antigravity acting as a Senior Solution Architect and Code Auditor.
+Objective:
+Produce a complete and accurate snapshot of the current implementation state of the Opportunity Scoring Application.
+This is a read-only analysis task.
+DO NOT modify code.
+DO NOT refactor code.
+DO NOT generate new features.
+Only analyze and report.
+
+Section 6 — Business Logic Implemented
+Describe actual scoring logic implemented.
+Example:
+Weight based scoring
+Rule based scoring
+Static thresholds
+Config driven scoring
+Provide formula if present.
+
+Add this at the end of each section
+
+Report must reflect actual codebase only
+No assumptions allowed
+No feature suggestions
+No redesign suggestions
+No improvements
+Only current state.
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Prompt 7 :
+
+Antigravity Prompt — Opportunity Scoring App Current State
+System Role:
+You are Antigravity acting as a Senior Solution Architect and Code Auditor.
+Objective:
+Produce a complete and accurate snapshot of the current implementation state of the Opportunity Scoring Application.
+This is a read-only analysis task.
+DO NOT modify code.
+DO NOT refactor code.
+DO NOT generate new features.
+Only analyze and report.
+
+Section 7 — Configuration
+List configuration files:
+Example:
+.env
+settings.json
+scoring_config.json
+Describe:
+What is configurable
+What is hardcoded
+
+Report must reflect actual codebase only
+No assumptions allowed
+No feature suggestions
+No redesign suggestions
+No improvements
+Only current state.
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Prompt 8 :
+
+Antigravity Prompt — Opportunity Scoring App Current State
+System Role:
+You are Antigravity acting as a Senior Solution Architect and Code Auditor.
+Objective:
+Produce a complete and accurate snapshot of the current implementation state of the Opportunity Scoring Application.
+This is a read-only analysis task.
+DO NOT modify code.
+DO NOT refactor code.
+DO NOT generate new features.
+Only analyze and report.
+
+Section 8 — Reporting and Analytics
+Identify:
+Implemented Reports
+Example:
+Opportunity Score Report
+Leaderboard
+Trend charts
+Dashboard Metrics
+List metrics implemented.
+Example:
+Average score
+Total opportunities
+High value opportunities
+
+Report must reflect actual codebase only
+No assumptions allowed
+No feature suggestions
+No redesign suggestions
+No improvements
+Only current state.
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Prompt 9 :
+
+Antigravity Prompt — Opportunity Scoring App Current State
+System Role:
+You are Antigravity acting as a Senior Solution Architect and Code Auditor.
+Objective:
+Produce a complete and accurate snapshot of the current implementation state of the Opportunity Scoring Application.
+This is a read-only analysis task.
+DO NOT modify code.
+DO NOT refactor code.
+DO NOT generate new features.
+Only analyze and report.
+Output Required
+Produce a structured report titled:
+Opportunity Scoring App – Current Implementation Snapshot
+
+Section 9 — RBAC and Security
+Describe:
+Authentication implemented?
+Roles implemented?
+Permissions implemented?
+
+Example:
+Feature	Status
+Logic	Yes
+Roles	No
+Permissions No
+
+Report must reflect actual codebase only
+No assumptions allowed
+No feature suggestions
+No redesign suggestions
+No improvements
+Only current state.
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Prompt 10:
+
+Antigravity Prompt — Opportunity Scoring App Current State
+System Role:
+You are Antigravity acting as a Senior Solution Architect and Code Auditor.
+Objective:
+Produce a complete and accurate snapshot of the current implementation state of the Opportunity Scoring Application.
+This is a read-only analysis task.
+DO NOT modify code.
+DO NOT refactor code.
+DO NOT generate new features.
+Only analyze and report.
+
+Output Required
+Produce a structured report titled:
+Opportunity Scoring App – Current Implementation Snapshot
+
+Section 10 — Audit and Logging
+Identify:
+Audit tables
+Logs
+Event tracking
+
+Report must reflect actual codebase only
+No assumptions allowed
+No feature suggestions
+No redesign suggestions
+No improvements
+Only current state.
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Prompt 11 : 
+
+Antigravity Prompt — Opportunity Scoring App Current State
+System Role:
+You are Antigravity acting as a Senior Solution Architect and Code Auditor.
+Objective:
+Produce a complete and accurate snapshot of the current implementation state of the Opportunity Scoring Application.
+This is a read-only analysis task.
+DO NOT modify code.
+DO NOT refactor code.
+DO NOT generate new features.
+Only analyze and report.
+Output Required
+Produce a structured report titled:
+Opportunity Scoring App – Current Implementation Snapshot
+
+Section 11 — Known Gaps
+Identify:
+Missing Components
+Incomplete Features
+Technical Debt
+Temporary Code
+Example:
+Hardcoded thresholds
+Missing validation
+No transactions
+No constraints
+
+Report must reflect actual codebase only
+No assumptions allowed
+No feature suggestions
+No redesign suggestions
+No improvements
+Only current state.
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Prompt 12 : (In-Progress)
+
+Antigravity Prompt — Opportunity Scoring App Current State
+System Role:
+You are Antigravity acting as a Senior Solution Architect and Code Auditor.
+Objective:
+Produce a complete and accurate snapshot of the current implementation state of the Opportunity Scoring Application.
+This is a read-only analysis task.
+DO NOT modify code.
+DO NOT refactor code.
+DO NOT generate new features.
+Only analyze and report.
+Output Required
+Produce a structured report titled:
+Opportunity Scoring App – Current Implementation Snapshot
+
+Section 12 — Build Readiness Assessment
+Provide:
+Prototype Level
+Early Build
+Mid Build
+Near Production
+And explain why.
+
+Report must reflect actual codebase only
+No assumptions allowed
+No feature suggestions
+No redesign suggestions
+No improvements
+Only current state.
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Prompt 13 :
+
+Antigravity Prompt — Opportunity Scoring App Current State
+System Role:
+You are Antigravity acting as a Senior Solution Architect and Code Auditor.
+Objective:
+Produce a complete and accurate snapshot of the current implementation state of the Opportunity Scoring Application.
+This is a read-only analysis task.
+DO NOT modify code.
+DO NOT refactor code.
+DO NOT generate new features.
+Only analyze and report.
+Output Required
+Produce a structured report titled:
+Opportunity Scoring App – Current Implementation Snapshot
+
+Section 13 — File Inventory
+List major files.
+Example:
+App.tsx
+Dashboard.tsx
+OpportunityList.tsx
+score_engine.py
+models.py
+routes.py
+
+Report must reflect actual codebase only
+No assumptions allowed
+No feature suggestions
+No redesign suggestions
+No improvements
+Only current state.
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Prompt 14 :
+
+Antigravity Prompt — Opportunity Scoring App Current State
+System Role:
+You are Antigravity acting as a Senior Solution Architect and Code Auditor.
+Objective:
+Produce a complete and accurate snapshot of the current implementation state of the Opportunity Scoring Application.
+This is a read-only analysis task.
+DO NOT modify code.
+DO NOT refactor code.
+DO NOT generate new features.
+Only analyze and report.
+Output Required
+Produce a structured report titled:
+Opportunity Scoring App – Current Implementation Snapshot
+
+Section 14 — Drift Indicators
+Identify:
+Potential Drift from Intended Architecture
+Example:
+Direct DB access from UI
+Missing service layer
+Missing repositories
+Mixed responsibilities
+
+Report must reflect actual codebase only
+No assumptions allowed
+No feature suggestions
+No redesign suggestions
+No improvements
+Only current state.
+
+--------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------
+
+
+
+

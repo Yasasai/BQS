@@ -1,0 +1,42 @@
+# Opportunity Scoring App – Current Implementation Snapshot
+
+## Section 10 — Audit and Logging
+
+This section details the current state of auditing, logging, and event tracking within the Opportunity Scoring Application based on the existing codebase.
+
+### 10.1 Audit Tables
+The following database tables are utilized to maintain a history of system actions and business process transitions:
+
+| Table Name | Primary Purpose | Key Audited Attributes |
+| :--- | :--- | :--- |
+| `sync_meta` | Tracks the status and history of data synchronization from external CRM (Oracle). | `meta_key`, `last_sync_timestamp`, `sync_status`, `records_processed`, `extra_info`. |
+| `opp_score_version` | Serves as a versioned audit trail for opportunity assessments. | `version_no`, `status` (Draft, Submitted, Approved, Rejected), `overall_score`, `created_at`, `submitted_at`, `summary_comment` (includes approval/rejection reasons). |
+| `opp_score_values` | Provides granular audit detail for individual scoring criteria per version. | `section_code`, `score`, `notes`, `selected_reasons` (stored as JSON). |
+| `sync_run` | (Infrastructure) Defined for tracking batch sync executions. | `status`, `started_at`, `ended_at`, `rows_upserted`, `error_message`. |
+| `opportunity_assignment` | (Structural) Defined to track role assignments (PH, SH, SA, SP). | `assigned_to_user_id`, `assigned_by_user_id`, `assigned_at`, `status`. *Note: Core logic currently updates the `opportunity` table directly, leaving this table as a future-proof placeholder.* |
+
+### 10.2 Logging Mechanisms
+The application employs multiple layers of logging for diagnostics and status reporting:
+
+*   **Backend Logging (Standard)**: 
+    *   Utilizes Python's native `logging` library across service layers (`oracle_service.py`, `sync_manager.py`).
+    *   Configured to log `INFO` level events (API requests, batch status, database commits) to the console.
+*   **File-Based Logging**:
+    *   `async_sync.py` implements a persistent log file: `backend/app/services/async_sync.log`.
+    *   Captures detailed timestamps and error messages during periodic or background synchronization tasks.
+*   **Application Startup**:
+    *   Synchronous startup events (DB initialization, initial sync) are logged using `print()` statements in `backend/main.py` and `backend/app/main.py`.
+*   **Oracle Integration Monitoring**:
+    *   Extensive logging of API endpoints, complete request URLs, response keys, and record counts to facilitate debugging of the CRM data flow.
+
+### 10.3 Event Tracking
+Current state analysis regarding user interaction and system events:
+
+*   **Business Event State Tracking**: 
+    *   Does not use a dedicated event-bus or audit-log microservice. 
+    *   Instead, "events" (like "Assessment Re-opened", "Assignment Changed", "Decision Made") are tracked via state transitions in the `opportunity.workflow_status` and entries in `opp_score_version`.
+*   **Frontend Logging**:
+    *   Minimal browser-side event tracking. Relies on standard console logging for debugging during development.
+*   **Missing Features (As of Current Snapshot)**:
+    *   No dedicated `ActivityLog` table for general user session events (e.g., login history, profile updates).
+    *   No third-party analytics or event tracking integration (e.g., Google Analytics, Segment, Sentry).

@@ -1,13 +1,13 @@
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import func
 from backend.app.core.database import get_db
 from backend.app.models import OppScoreVersion, OppScoreSectionValue, OppScoreSection, Opportunity, AppUser
+from backend.app.services.scoring_service import calculate_weighted_score
 
 router = APIRouter(prefix="/api/scoring", tags=["scoring"])
 
@@ -273,20 +273,8 @@ def submit_score(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
     if is_sa: draft.sa_submitted = True
     if is_sp: draft.sp_submitted = True
     
-    # Calculate Weighted Score
-    total_w, weighted_s = 0, 0
-    from sqlalchemy.orm import joinedload
-    vals = db.query(OppScoreSectionValue).options(joinedload(OppScoreSectionValue.section)).filter(
-        OppScoreSectionValue.score_version_id == draft.score_version_id
-    ).all()
-    
-    for v in vals:
-        if v.section:
-            weighted_s += (v.score * v.section.weight)
-            total_w += v.section.weight
-    
-    max_s = total_w * 5
-    draft.overall_score = int((weighted_s / max_s) * 100) if max_s > 0 else 0
+    # Calculate Weighted Score using service
+    draft.overall_score = calculate_weighted_score(db, draft.score_version_id)
     
     # Check Combined Completion
     sa_id = opp.assigned_sa_id
@@ -304,7 +292,7 @@ def submit_score(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
         # FULL SUBMISSION - Only if there is at least one actual submission
         if draft.sa_submitted or draft.sp_submitted:
             draft.status = "SUBMITTED"
-            draft.submitted_at = datetime.utcnow()
+            draft.submitted_at = datetime.now(timezone.utc)
             
             if is_fast_track:
                 opp.workflow_status = "PENDING_GH_APPROVAL"
@@ -333,7 +321,6 @@ def submit_score(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "success", "overall_score": draft.overall_score, "workflow_status": opp.workflow_status}
 
-@router.get("/{opp_id}/combined-review")
 @router.get("/{opp_id}/combined-review")
 def get_combined_score(opp_id: str, version_no: Optional[int] = Query(None), db: Session = Depends(get_db)):
     """

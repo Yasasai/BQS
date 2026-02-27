@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, JSON, ForeignKey, Text
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 
@@ -14,7 +14,7 @@ class AppUser(Base):
     email = Column(String, unique=True, nullable=False)
     display_name = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
     user_roles = relationship("UserRole", back_populates="user")
@@ -59,7 +59,7 @@ class Opportunity(Base):
     primary_practice_id = Column(String, ForeignKey("practice.practice_id"), nullable=True)
     
     crm_last_updated_at = Column(DateTime, nullable=False)
-    local_last_synced_at = Column(DateTime, default=datetime.utcnow)
+    local_last_synced_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     workflow_status = Column(String, nullable=True) # NEW, ASSIGNED_TO_SA, UNDER_ASSESSMENT, APPROVED, REJECTED, etc.
     is_active = Column(Boolean, default=True)
 
@@ -84,7 +84,7 @@ class SyncRun(Base):
     __tablename__ = "sync_run"
     sync_run_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     status = Column(String) 
-    started_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     ended_at = Column(DateTime, nullable=True)
     rows_upserted = Column(Integer, default=0)
     error_message = Column(Text, nullable=True)
@@ -97,7 +97,7 @@ class OpportunityAssignment(Base):
     opp_id = Column(String, ForeignKey("opportunity.opp_id"), nullable=False)
     assigned_to_user_id = Column(String, ForeignKey("app_user.user_id"), nullable=False)
     assigned_by_user_id = Column(String, ForeignKey("app_user.user_id"), nullable=False)
-    assigned_at = Column(DateTime, default=datetime.utcnow)
+    assigned_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     status = Column(String, default="ACTIVE") # ACTIVE, REVOKED
 
     opportunity = relationship("Opportunity", back_populates="assignments")
@@ -119,7 +119,7 @@ class OppScoreVersion(Base):
     created_by_user_id = Column(String, ForeignKey("app_user.user_id"), nullable=True)
     sa_submitted = Column(Boolean, default=False)
     sp_submitted = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     submitted_at = Column(DateTime, nullable=True)
     attachment_name = Column(String, nullable=True) # Added for evidence upload
 
@@ -151,7 +151,7 @@ class OppScoreSectionValue(Base):
 class SyncMeta(Base):
     __tablename__ = "sync_meta"
     meta_key = Column(String, primary_key=True) # e.g. 'oracle_opportunities'
-    last_sync_timestamp = Column(DateTime, default=datetime.utcnow)
+    last_sync_timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     sync_status = Column(String, nullable=True) # SUCCESS, FAILED
     records_processed = Column(Integer, default=0)
     extra_info = Column(JSON, nullable=True)
@@ -175,4 +175,4 @@ class OracleOpportunity(Base):
     sales_stage = Column(String, nullable=True)
     last_update_date = Column(DateTime, nullable=True)
     raw_json = Column(JSON, nullable=True)
-    synced_at = Column(DateTime, default=datetime.utcnow)
+    synced_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

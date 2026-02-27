@@ -26,20 +26,16 @@ from backend.app.core.database import SessionLocal, init_db
 from backend.app.models import Opportunity, Practice, SyncMeta
 
 
-# Set up file logging
-log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "async_sync.log")
-logging.basicConfig(
-    level=logging.INFO, 
-    format='%(asctime)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger(__name__)
+
+from backend.app.core.logging_config import setup_logging, get_logger
+
+# Set up standardized logging
+setup_logging()
+logger = get_logger("async_sync")
 
 def log(msg):
     logger.info(msg)
+
 
 # Semaphore for concurrency control
 sem = asyncio.Semaphore(MAX_CONCURRENCY)

@@ -1,0 +1,62 @@
+# Opportunity Scoring App – Current Implementation Snapshot
+
+## Section 13 — File Inventory
+
+This section provides a complete inventory of the major files that constitute the Opportunity Scoring Application, organized by their respective modules and layers.
+
+### Frontend (React + TypeScript + Vite)
+Located in the `frontend/` directory.
+
+- **Core Infrastructure**
+    - `src/main.tsx`: Application entry point.
+    - `src/App.tsx`: Main application component and routing configuration.
+    - `src/types.ts`: Global TypeScript interfaces and types.
+    - `index.html`: Main HTML template.
+    - `package.json`: Frontend dependency and script configuration.
+    - `vite.config.ts`: Vite build configuration.
+    - `tailwind.config.js`: Tailwind CSS styling configuration.
+
+- **Primary Pages**
+    - `src/pages/OpportunityInbox.tsx`: Unified inbox for all user roles.
+    - `src/pages/OpportunityDetail.tsx`: Detailed view of a single opportunity.
+    - `src/pages/ScoreOpportunity.tsx`: Main interface for submitting and reviewing scores.
+    - `src/pages/PracticeHeadDashboard.tsx`: High-level metrics and assignments for Practice Heads.
+    - `src/pages/SalesHeadDashboard.tsx`: Oversight dashboard for Sales Heads.
+    - `src/pages/SolutionArchitectDashboard.tsx`: Task-focused dashboard for Solution Architects.
+    - `src/pages/LeadershipDashboard.tsx`: Analytical dashboard for leadership review.
+
+- **Project Styling**
+    - `src/index.css`: Global styles and Tailwind directives.
+
+---
+
+### Backend (FastAPI + SQL Alchemy)
+Located in the `backend/` directory.
+
+- **Core Application Layer**
+    - `app/main.py`: FastAPI application setup, middleware, and router registration.
+    - `app/models.py`: SQLAlchemy database models representing the schema.
+    - `app/core/database.py`: Database connection pool and session management.
+    - `requirements.txt`: Python package dependencies.
+
+- **API Routers**
+    - `app/routers/opportunities.py`: Endpoints for opportunity discovery and metadata.
+    - `app/routers/scoring.py`: Endpoints for assessment submission and score calculations.
+    - `app/routers/inbox.py`: Logic for role-based assignment filtering and inbox management.
+    - `app/routers/auth.py`: Authentication and user context endpoints.
+    - `app/routers/batch_sync.py`: Interface for managing data synchronization.
+
+- **Service & Integration Layer**
+    - `oracle_service.py`: Logic for connecting to and fetching data from external Oracle systems.
+    - `sync_manager.py`: Coordination logic for synchronizing external data with the local database.
+    - `constants.py`: Centralized backend configuration and mapping.
+
+---
+
+### Root Configuration & Documentation
+
+- `.env`: Environment variables for database and API credentials.
+- `ARCHITECTURE.md`: Technical documentation of the system flow and design.
+- `README.md`: General project overview and setup instructions.
+- `setup_complete.py`: Final setup and verification script.
+- `batch_sync_with_offset.py`: Advanced synchronization utility script.

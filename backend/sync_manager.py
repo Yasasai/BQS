@@ -19,12 +19,15 @@ ORACLE_USER = os.getenv("ORACLE_USER")
 ORACLE_PASSWORD = os.getenv("ORACLE_PASSWORD", os.getenv("ORACLE_PASS"))
 MAX_CONCURRENCY = 5  # Limit concurrent requests
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
-logger = logging.getLogger(__name__)
+from backend.app.core.logging_config import setup_logging, get_logger
 
-def log(msg): 
-    print(msg, flush=True)
+# Setup standardized logging
+setup_logging()
+logger = get_logger("sync_manager")
+
+def log(msg):
     logger.info(msg)
+
 
 from backend.app.core.database import SessionLocal, init_db
 from backend.app.models import Opportunity, Practice
@@ -206,12 +209,12 @@ async def sync_opportunities_async():
                 tasks.append(fetch_page(client, offset, limit))
             
             # Execute in parallel
-            log(f"⚡ Launching {len(tasks)} parallel requests...")
+            logger.info(f"⚡ Launching {len(tasks)} parallel requests...")
             results = await asyncio.gather(*tasks)
             
             # Flatten results
             all_items = [item for page in results for item in page]
-            log(f"📥 Downloaded {len(all_items)} records. Saving to DB...")
+            logger.info(f"📥 Downloaded {len(all_items)} records. Saving to DB...")
             
             # Save to DB (Synchronous operation)
             count = save_batch_to_db(all_items)
@@ -248,7 +251,7 @@ async def sync_opportunities_async():
                 
                 offset += (limit * chunk_size)
 
-    log(f"🎉 Async Sync Complete! Total Processed: {total_processed}")
+        logger.info(f"🎉 Async Sync Complete! Total Processed: {total_processed}")
     return total_processed
 
 def sync_opportunities():

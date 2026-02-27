@@ -5,6 +5,10 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from backend.app.models import Base, Role, AppUser, UserRole, OppScoreSection, OppScoreVersion, OppScoreSectionValue, Opportunity, OpportunityAssignment, Practice, SyncRun, SyncMeta, OracleOpportunity
+from backend.app.core.logging_config import get_logger
+
+logger = get_logger("database")
+
 
 # Database Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Abcd1234@127.0.0.1:5432/bqs")
@@ -19,10 +23,10 @@ def init_db():
             cur.execute("SELECT 1 FROM pg_catalog.pg_database WHERE datname = 'bqs'")
             if not cur.fetchone():
                 cur.execute("CREATE DATABASE bqs")
-                print("Database 'bqs' created.")
+                logger.info("Database 'bqs' created.")
         conn.close()
     except Exception as e:
-        print(f"Startup DB Check: {e}")
+        logger.error(f"Startup DB Check: {e}")
 
     # Now connect to the actual DB
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
@@ -73,7 +77,7 @@ def init_db():
         db.commit()
     except Exception as e:
         db.rollback()
-        print(f"Seeding Error: {e}")
+        logger.error(f"Seeding Error: {e}")
     finally:
         db.close()
 

@@ -1,0 +1,87 @@
+# Opportunity Scoring App – Current Implementation Snapshot
+
+## Section 1 — Architecture Overview
+
+### Frontend
+**Framework:** React (v18.2.0) with Vite (v5.0.0)
+**Language:** TypeScript
+**Major Folders:**
+- `src/components/`: UI components (Sidebar, Layout, StatusBadge, Tables, etc.)
+- `src/pages/`: Main application views (Dashboards, Detail views, Scoring)
+- `src/context/`: State management (AuthContext, UserContext)
+- `src/hooks/`: Custom React hooks (useAuth, etc.)
+- `src/constants/`: Shared constants and enums
+- `src/utils/`: Utility functions (formatting, validation)
+- `src/styles/`: CSS and Tailwind configurations
+
+**Key Components:**
+- `Layout.tsx`: Main application wrapper with Sidebar integration.
+- `Sidebar.tsx`: Role-based navigation and filtering.
+- `App.tsx`: Routing logic using `react-router-dom` (v7.11.0).
+
+**Layout System:**
+- Responsive layout using Tailwind CSS.
+- Flexbox-based sidebar and main content area.
+- Role-based dashboard redirects in `App.tsx`.
+
+**State Management Approach:**
+- React Context API for Global State (`AuthContext` for authentication and `UserContext` for user-specific data).
+- Local state handles page-specific data fetching and form interactions.
+
+---
+
+### Backend
+**Framework:** FastAPI (Python)
+**Folder Structure:**
+- `backend/app/`: Core application logic.
+  - `api/`: (Alternative or legacy API location)
+  - `core/`: Database configuration and system logic (`database.py`, `self_healing.py`).
+  - `models/`: SQLAlchemy data models (`models.py`).
+  - `routers/`: API route definitions (`opportunities.py`, `scoring.py`, `auth.py`, `inbox.py`, etc.).
+  - `services/`: Business logic and external integrations (`oracle_service.py`, `sync_manager.py`).
+- `backend/main.py`: Main entry point for the FastAPI server.
+- `backend/database.py`: Legacy or redundant database configuration.
+- `backend/oracle_service.py`: Root-level oracle integration script.
+
+**Service Structure:**
+- **Inbound Data:** `oracle_service.py` handles direct communication with Oracle CRM REST APIs (Opportunities Finder).
+- **Processing Layer:** `sync_manager.py` manages batch synchronization and mapping from Oracle JSON to the local database.
+- **Persistence:** SQLAlchemy ORM for data storage in PostgreSQL.
+- **API Layer:** Modular routers handle specific functionality (e.g., `scoring.py` for assessment logic, `opportunities.py` for dashboard queries).
+
+---
+
+### Deployment
+**Docker files:**
+- No `Dockerfile` or `docker-compose.yml` found in the root, backend, or frontend directories.
+
+**Cloud Configuration:**
+- No explicit cloud provider configuration (e.g., AWS, Azure, GCP) found in the immediate codebase.
+
+**Environment Configs:**
+- `.env` (derived from `.env.example`) used for environment-specific secrets (Database URLs, Oracle CRM credentials).
+- `start_backend.bat`, `start_server.bat`, `start_dashboard.bat`: Batch scripts for local development and server execution.
+
+---
+
+## Section 2 — Data Models & Schema Highlights
+
+### Core Entities
+- **Opportunity:** Tracks CRM-synced opportunities with local workflow state and assignment fields (PH, SH, SA, SP).
+- **AppUser & Role:** Role-based access control system (GH, PH, SH, SA, SP).
+- **OppScoreVersion:** Tracks multiple assessment rounds (SA and SP submissions).
+- **OppScoreSectionValue:** Stores granular scores and notes for each scoring criterion (e.g., Strategic Fit, Win Probability).
+- **Practice:** Manages business practices for opportunity classification.
+
+### Workflow States
+Managed via the `workflow_status` column in the `Opportunity` table:
+- `NEW`, `ASSIGNED_TO_SA`/`SP`, `UNDER_ASSESSMENT`, `SA_SUBMITTED`, `SP_SUBMITTED`, `READY_FOR_REVIEW`, `UNDER_REVIEW`, `APPROVED`, `REJECTED`.
+
+---
+
+## Section 3 — Key Integrations
+
+### Oracle CRM Integration
+- **Mechanism:** REST API calls with Basic Auth or OAuth2 (Client Credentials).
+- **Logic:** Incremental and full sync operations implemented in `oracle_service.py` and `sync_manager.py`.
+- **Mapping:** Dynamic mapping from Oracle's `OptyId` and custom fields to local PostgreSQL schema.

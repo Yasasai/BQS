@@ -1,0 +1,19 @@
+# Opportunity Scoring App – Current Implementation Snapshot
+
+This report provides a Senior Solution Architect's assessment of the current implementation state of the BQS Opportunity Scoring Application.
+
+## Implemented Modules
+
+| Module | Status | Notes |
+| :--- | :--- | :--- |
+| **Authentication** | Partial | Simulated system using `AuthContext` and `localStorage`. No JWT/Session security; users are hardcoded in `MOCK_USERS` for prototyping purposes. Aligns with `seed_users.py`. |
+| **Opportunity Management (Sync)** | Complete | Comprehensive Oracle CRM integration implemented via `oracle_service.py`. Supports OAuth2/Basic auth, systematic batch syncing with offset tracking, and robust data mapping to internal models. |
+| **Scoring Engine** | Complete | Robust implementation in `scoring.py`. Supports versions, shared drafts for SA/SP collaboration, weighted calculations, and automatic workflow status transitions (including "Fast Track" logic). |
+| **Dashboards** | Complete | Role-based dashboards (Practice Head, Sales Head, Solution Architect) are fully functional with filtering, bulk assignments, and approval workflows. Management dashboard includes export (Excel/CSV/PDF). |
+| **Leadership Governance** | Partial | Frontend UI exists in `LeadershipDashboard.tsx` with statistics and review tables, but the data is currently mocked; API integration is not yet connected. |
+| **Admin / User Management** | Missing | No dedicated Admin UI for user/role management. User creation and role assignment are handled via backend API routes and database seed scripts. |
+
+## Technical Summary
+- **Backend**: FastAPI with SQLAlchemy/PostgreSQL. Comprehensive business logic for scoring and CRM sync.
+- **Frontend**: React (TSX) + Vite. Modular component structure (`OpportunitiesTable`, `AssignArchitectModal`) reused across role-based dashboards.
+- **Data Integration**: Direct integration with Oracle CRM for automated opportunity fetching.

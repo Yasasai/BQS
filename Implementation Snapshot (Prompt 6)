@@ -1,0 +1,52 @@
+# Opportunity Scoring App – Current Implementation Snapshot
+
+## Section 6 — Business Logic Implemented
+
+The Opportunity Scoring Application implements a **Weight-based Scoring** methodology. The scoring logic is centrally managed in the backend and allows for collaborative input from both Solution Architects (SA) and Salespersons (SP).
+
+### Scoring Methodology
+*   **Methodology Type**: Weight-based scoring.
+*   **Scale**: Individual sections are scored on a scale of **1.0 to 5.0**, with 0.5 increments supported.
+*   **Calculation Engine**: Backend-driven (implemented in `backend/app/routers/scoring.py`).
+*   **Configuration**: Section names and weights are stored in the `opp_score_section` table and initialized via `backend/app/core/database.py`.
+
+### Scoring Formula
+The overall score is a weighted average of individual section scores, normalized to a percentage (0-100).
+
+$$Overall\ Score\ (\%) = \left( \frac{\sum (Section\ Score \times Section\ Weight)}{\sum Weight \times 5} \right) \times 100$$
+
+Given that the sum of all weights in the current configuration is exactly **1.0**, the simplified formula used is:
+
+$$Overall\ Score\ (\%) = \sum (Section\ Score \times Section\ Weight) \times 20$$
+
+### Configured Weights
+The following categories and weights are currently implemented:
+
+| Section Code | Section Name | Weight |
+| :--- | :--- | :--- |
+| `STRAT` | Strategic Fit | 0.15 |
+| `WIN` | Win Probability | 0.15 |
+| `FIN` | Financial Value | 0.15 |
+| `COMP` | Competitive Position | 0.10 |
+| `FEAS` | Delivery Feasibility | 0.10 |
+| `CUST` | Customer Relationship | 0.10 |
+| `RISK` | Risk Exposure | 0.10 |
+| `PROD` | Product / Service Compliance | 0.05 |
+| `LEGAL` | Legal & Commercial Readiness | 0.10 |
+| **Total** | | **1.00** |
+
+### Static Thresholds (Business Rules)
+*   **Fast Track Workflow**: A "Fast Track" rule is implemented to expedite highly qualified opportunities.
+    *   **Condition**: If the calculated overall score (on a 5-point scale) is between **3.5 and 4.0** (inclusive).
+    *   **Effect**: The opportunity status is updated to `PENDING_GH_APPROVAL`, and Practice Head/Sales Head statuses are automatically transitioned to `NOTIFIED`, bypassing sequential review steps.
+*   **Collaborative Completion**: 
+    *   An assessment round is only marked as `SUBMITTED` when both assigned roles (SA and SP) have submitted their respective scores.
+    *   If only one has submitted, the status remains `UNDER_ASSESSMENT` or `SA_SUBMITTED`/`SP_SUBMITTED`.
+
+---
+Report must reflect actual codebase only
+No assumptions allowed
+No feature suggestions
+No redesign suggestions
+No improvements
+Only current state.

@@ -6,6 +6,10 @@ from datetime import datetime, date
 from pydantic import BaseModel
 from backend.app.core.database import get_db
 from backend.app.models import Opportunity, OpportunityAssignment, OppScoreVersion, Practice, AppUser, OppScoreSectionValue
+from backend.app.core.logging_config import get_logger
+
+logger = get_logger("opportunities_router")
+
 
 router = APIRouter(prefix="/api/opportunities", tags=["opportunities"])
 
@@ -156,7 +160,7 @@ def get_all_opportunities(
                     elif col == 'remote_id':
                         query = query.filter(Opportunity.opp_number.ilike(f"%{val}%"))
         except Exception as e:
-            print(f"Filter error in backend: {e}")
+            logger.error(f"Filter error in backend: {e}")
             pass
 
     # 3. Role/Target filtering - Strictly enforced
@@ -421,7 +425,7 @@ def get_opportunity_by_id(opp_id: str, db: Session = Depends(get_db)):
         ).first() is not None
 
     status = o.workflow_status
-    if not status or status in ['OPEN', 'ASSIGNED_TO_SA', 'ASSIGNED_TO_SP', 'UNDER_ASSESSMENT']:
+    if not status or status in ['OPEN', 'ASSIGNED_TO_SA', 'ASSIGNED_TO_SP']:
         if latest_score:
             if latest_score.status == 'SUBMITTED': 
                 status = "SUBMITTED"
@@ -438,6 +442,11 @@ def get_opportunity_by_id(opp_id: str, db: Session = Depends(get_db)):
                 status = "ASSIGNED"
             else:
                 status = "NEW"
+    
+    # If the database already says UNDER_ASSESSMENT, and we just calculated it as NEW/ASSIGNED/etc, 
+    # we should probably trust the explicit status if it's more specific.
+    if o.workflow_status == "UNDER_ASSESSMENT" and status in ["NEW", "ASSIGNED"]:
+        status = "UNDER_ASSESSMENT"
     
     return {
         "id": o.opp_id,
