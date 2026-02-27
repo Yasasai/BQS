@@ -5,7 +5,7 @@ from requests.auth import HTTPBasicAuth
 import logging
 import os
 import base64
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 # Load env with absolute path to ensure it's found
@@ -26,9 +26,13 @@ ORACLE_SCOPE = os.getenv("ORACLE_SCOPE", f"{ORACLE_BASE_URL}/crmRestApi/resource
 ORACLE_USER = os.getenv("ORACLE_USER")
 ORACLE_PASS = os.getenv("ORACLE_PASSWORD", os.getenv("ORACLE_PASS"))
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+
+from backend.app.core.logging_config import setup_logging, get_logger
+
+# Setup standardized logging
+setup_logging()
+logger = get_logger("oracle_service")
+
 
 def get_robust_session():
     """Returns a requests Session with built-in retries and timeouts"""
@@ -244,7 +248,7 @@ def map_oracle_to_db(item):
                 return None
 
         last_update_str = item.get("LastUpdateDate") or item.get("OptyLastUpdateDate")
-        crm_last_updated_at = parse_date(last_update_str) or datetime.utcnow()
+        crm_last_updated_at = parse_date(last_update_str) or datetime.now(timezone.utc)
         
         close_date = None
         eff_date = item.get("EffectiveDate")
@@ -284,7 +288,7 @@ def sync_opportunities_to_db(db_session=None):
     db = db_session or SessionLocal()
     total_processed = 0
     total_saved = 0
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
 
     logger.info("Starting robust synchronization...")
 
@@ -338,7 +342,7 @@ def sync_opportunities_to_db(db_session=None):
         if not meta:
             meta = SyncMeta(meta_key="oracle_sync_v2")
             db.add(meta)
-        meta.last_sync_timestamp = datetime.utcnow()
+        meta.last_sync_timestamp = datetime.now(timezone.utc)
         meta.sync_status = "SUCCESS"
         meta.records_processed = total_saved
         db.commit()
@@ -350,7 +354,7 @@ def sync_opportunities_to_db(db_session=None):
         if not db_session:
             db.close()
             
-    duration = (datetime.utcnow() - start_time).total_seconds()
+    duration = (datetime.now(timezone.utc) - start_time).total_seconds()
     logger.info(f"Sync Complete! Processed: {total_processed}, Saved: {total_saved} in {duration:.2f}s")
     return {"processed": total_processed, "saved": total_saved}
 

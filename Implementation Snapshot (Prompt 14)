@@ -1,0 +1,36 @@
+# Opportunity Scoring App – Current Implementation Snapshot
+
+## Section 14 — Drift Indicators
+
+This section identifies potential drift from the intended architecture based on the actual codebase analysis.
+
+### 1. Lack of Service and Repository Layers (Backend)
+The backend architecture exhibits a significant drift toward a "fat controller/router" pattern.
+- **Direct DB Access**: API endpoints in `backend/app/routers/scoring.py` and `backend/app/routers/opportunities.py` directly interact with the SQLAlchemy `Session`.
+- **Missing Repository Layer**: There is no abstracted data access layer; SQL-like queries are embedded directly in route handlers.
+- **Underutilized Service Layer**: While a `backend/app/services` directory exists, it is primarily used for the `sync_manager`. Core business logic (scoring, approvals, workflow transitions) remains trapped in the router files.
+
+### 2. Business Logic Leakage (Mixed Responsibilities)
+Business rules and logic are scattered across multiple layers instead of being centralized.
+- **Scoring Formulas**: The weighted score calculation is implemented in `backend/app/routers/scoring.py` (lines 276-289) and duplicated in the frontend `ScoreOpportunity.tsx` (line 62).
+- **Workflow State Management**: Transition logic for opportunity statuses (e.g., "FAST TRACK" logic, approval transitions) is hardcoded within route handlers in `opportunities.py` (lines 521-565).
+- **Validation Rules**: Mandatory field checks and conditional justification requirements are implemented in the frontend UI component (`ScoreOpportunity.tsx`) rather than being enforced by a backend validation service or Pydantic models.
+
+### 3. Duplicate and "Zombie" Code
+The codebase contains several remnants of previous iterations or incomplete refactors.
+- **Duplicate Router Directories**: Identical or similar route files exist in both `backend/routers/` and `backend/app/routers/`. `main.py` only uses the latter, leaving the former as zombie code.
+- **Redundant Backup Files**: Files like `opportunities.py-CLEAN` are present in the active source tree, indicating a lack of clean version control practices within the deployment environment.
+- **Hardcoded Constants**: Scoring criteria keys and weights are hardcoded in both the database initialization (`database.py`) and the frontend (`ScoreOpportunity.tsx`), creating a high risk of desynchronization.
+
+### 4. Configuration Drift
+- **Hardcoded URLs**: Frontend components contain hardcoded API endpoints (`http://localhost:8000/...`).
+- **Mixed responsibilities in Models**: `database.py` includes seeding logic and "self-healing" functions (`heal_database`) that modify schema at runtime, which drifts from standard migration-based evolution.
+
+### 5. Summary Table of Drift Indicators
+| Indicator | Observed State | Recommended Architecture |
+| :--- | :--- | :--- |
+| **Layering** | Router → DB | Router → Service → Repository → DB |
+| **Logic Placement** | Backend Routers & Frontend Components | Centralized Backend Service Layer |
+| **Data Integrity** | Manual UI-side validation | API-level Schema & Logic Validation |
+| **Code Hygiene** | Duplicate files and directories | Clean package structure with no zombie code |
+| **Scalability** | Hardcoded weights/criteria | Configuration-driven or DB-driven criteria |

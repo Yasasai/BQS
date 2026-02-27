@@ -1,0 +1,195 @@
+# Opportunity Scoring App – Current Implementation Snapshot
+
+## Section 5 — Database Schema
+
+This section details the current database schema as implemented in the PostgreSQL database via SQLAlchemy models and manual SQL scripts.
+
+### Implemented Tables
+
+#### app_user
+Represents the users of the system.
+- **Columns:**
+    - `user_id` (String, PK): Unique identifier (UUID).
+    - `email` (String): Unique user email.
+    - `display_name` (String): User's full name.
+    - `is_active` (Boolean): Status of the user (default: `True`).
+    - `created_at` (DateTime): Timestamp of creation.
+- **Primary Key:** `user_id`
+- **Constraints:** `email` is UNIQUE and NOT NULL.
+
+#### role
+Defines the various roles within the application.
+- **Columns:**
+    - `role_id` (Integer, PK): Unique identifier.
+    - `role_code` (String): Short code for the role (e.g., GH, PH, SH, SA, SP).
+    - `role_name` (String): Descriptive name of the role.
+- **Primary Key:** `role_id`
+- **Constraints:** `role_code` is UNIQUE.
+
+#### user_role
+Association table between users and roles.
+- **Columns:**
+    - `user_id` (String, PK, FK): Reference to `app_user.user_id`.
+    - `role_id` (Integer, PK, FK): Reference to `role.role_id`.
+- **Primary Key:** (`user_id`, `role_id`)
+- **Foreign Keys:**
+    - `user_id` -> `app_user(user_id)`
+    - `role_id` -> `role(role_id)`
+
+#### practice
+Represents business practices.
+- **Columns:**
+    - `practice_id` (String, PK): Unique identifier (UUID).
+    - `practice_code` (String): Unique code for the practice.
+    - `practice_name` (String): Name of the practice.
+- **Primary Key:** `practice_id`
+- **Constraints:** `practice_code` is UNIQUE and `practice_name` is NOT NULL.
+
+#### opportunity
+Core table for tracking sales opportunities synced from CRM.
+- **Columns:**
+    - `opp_id` (String, PK): Oracle OptyId.
+    - `opp_number` (String): Formatted opportunity number.
+    - `opp_name` (String): Name of the opportunity.
+    - `customer_name` (String): Name of the customer.
+    - `geo` (String): Geographical region.
+    - `currency` (String): Currency code.
+    - `deal_value` (Float): Monetary value of the deal.
+    - `stage` (String): Current CRM stage.
+    - `close_date` (DateTime): Expected closing date.
+    - `sales_owner_user_id` (String, FK): Reference to `app_user.user_id`.
+    - `primary_practice_id` (String, FK): Reference to `practice.practice_id`.
+    - `crm_last_updated_at` (DateTime): Last update timestamp from CRM.
+    - `local_last_synced_at` (DateTime): Last sync timestamp.
+    - `workflow_status` (String): Internal workflow state (e.g., NEW, ASSIGNED_TO_SA, APPROVED).
+    - `is_active` (Boolean): Boolean flag for active status.
+    - `assigned_practice_head_id` (String, FK): Assigned PH.
+    - `assigned_sales_head_id` (String, FK): Assigned SH.
+    - `assigned_sa_id` (String, FK): Assigned Solution Architect.
+    - `assigned_sp_id` (String, FK): Assigned Salesperson.
+    - `gh_approval_status` (String): Global Head approval state.
+    - `ph_approval_status` (String): Practice Head approval state.
+    - `sh_approval_status` (String): Sales Head approval state.
+    - `combined_submission_ready` (Boolean): Flag for aggregate submission readiness.
+- **Primary Key:** `opp_id`
+- **Foreign Keys:**
+    - `sales_owner_user_id` -> `app_user(user_id)`
+    - `primary_practice_id` -> `practice(practice_id)`
+    - `assigned_practice_head_id` -> `app_user(user_id)`
+    - `assigned_sales_head_id` -> `app_user(user_id)`
+    - `assigned_sa_id` -> `app_user(user_id)`
+    - `assigned_sp_id` -> `app_user(user_id)`
+
+#### sync_run
+Log of CRM synchronization process executions.
+- **Columns:**
+    - `sync_run_id` (String, PK): Unique identifier.
+    - `status` (String): Execution status (e.g., SUCCESS, FAILED).
+    - `started_at` (DateTime): Start timestamp.
+    - `ended_at` (DateTime): End timestamp.
+    - `rows_upserted` (Integer): Count of records modified.
+    - `error_message` (Text): Error details if failed.
+- **Primary Key:** `sync_run_id`
+
+#### opportunity_assignment
+Tracks history and assignments of users to opportunities.
+- **Columns:**
+    - `assignment_id` (String, PK): Unique identifier.
+    - `opp_id` (String, FK): Reference to `opportunity.opp_id`.
+    - `assigned_to_user_id` (String, FK): User receiving the assignment.
+    - `assigned_by_user_id` (String, FK): User making the assignment.
+    - `assigned_at` (DateTime): Timestamp of assignment.
+    - `status` (String): Assignment status (ACTIVE/REVOKED).
+- **Primary Key:** `assignment_id`
+- **Foreign Keys:**
+    - `opp_id` -> `opportunity(opp_id)`
+    - `assigned_to_user_id` -> `app_user(user_id)`
+    - `assigned_by_user_id` -> `app_user(user_id)`
+
+#### opp_score_version
+Header table for scoring assessment versions.
+- **Columns:**
+    - `score_version_id` (String, PK): Unique identifier.
+    - `opp_id` (String, FK): Reference to `opportunity.opp_id`.
+    - `version_no` (Integer): Version sequence number.
+    - `status` (String): Version status (DRAFT, SUBMITTED).
+    - `overall_score` (Integer): Final calculated score.
+    - `confidence_level` (String): Assessor's confidence.
+    - `recommendation` (String): Strategic recommendation.
+    - `summary_comment` (Text): Overall qualitative assessment.
+    - `created_by_user_id` (String, FK): Reference to `app_user.user_id`.
+    - `sa_submitted` (Boolean): SA submission flag.
+    - `sp_submitted` (Boolean): SP submission flag.
+    - `created_at` (DateTime): Timestamp of creation.
+    - `submitted_at` (DateTime): Timestamp of submission.
+    - `attachment_name` (String): Name of the evidence file.
+- **Primary Key:** `score_version_id`
+- **Foreign Keys:**
+    - `opp_id` -> `opportunity(opp_id)`
+    - `created_by_user_id` -> `app_user(user_id)`
+
+#### opp_score_section
+Configuration of scoring sections/criteria.
+- **Columns:**
+    - `section_code` (String, PK): Unique code (e.g., STRAT, WIN, FIN).
+    - `section_name` (String): Display name of the section.
+    - `display_order` (Integer): Order in frontend UI.
+    - `weight` (Float): Impact on overall score.
+- **Primary Key:** `section_code`
+
+#### opp_score_values
+Individual section scores for a specific version.
+- **Columns:**
+    - `score_value_id` (String, PK): Unique identifier.
+    - `score_version_id` (String, FK): Reference to `opp_score_version.score_version_id`.
+    - `section_code` (String, FK): Reference to `opp_score_section.section_code`.
+    - `score` (Float): Numerical score given.
+    - `notes` (Text): Qualitative notes per section.
+    - `selected_reasons` (JSON): Justifications selected from predefined lists.
+- **Primary Key:** `score_value_id`
+- **Foreign Keys:**
+    - `score_version_id` -> `opp_score_version(score_version_id)`
+    - `section_code` -> `opp_score_section(section_code)`
+
+#### sync_meta
+Tracks high-level sync state and timestamps.
+- **Columns:**
+    - `meta_key` (String, PK): Key identifying the sync type.
+    - `last_sync_timestamp` (DateTime): Timestamp of last successful sync.
+    - `sync_status` (String): Status of the last run.
+    - `records_processed` (Integer): Count of records handled.
+    - `extra_info` (JSON): Additional state metadata.
+- **Primary Key:** `meta_key`
+
+#### oracle_opportunities
+Staging table for raw CRM data verification.
+- **Columns:**
+    - `id` (String, PK): Internal UUID.
+    - `opty_id` (String): CRM OptyId.
+    - `opty_number` (String): CRM Opty Number.
+    - `name` (String): Opportunity name.
+    - `account_name` (String): Customer name.
+    - `revenue` (Float): Deal value.
+    - `currency` (String): Currency code.
+    - `sales_stage` (String): CRM Stage.
+    - `last_update_date` (DateTime): CRM last modification date.
+    - `raw_json` (JSON): Complete raw response from Oracle.
+    - `synced_at` (DateTime): Internal sync timestamp.
+- **Primary Key:** `id`
+- **Constraints:** `opty_id` is indexed for performance.
+
+---
+
+### Identified Schema Observations
+
+#### Missing Constraints
+1.  **Unique Composite Key:** `opp_score_version` lacks a unique constraint on `(opp_id, version_no)`, which could lead to duplicate version numbers for the same opportunity.
+2.  **Check Constraints:** Numerical columns like `opp_score_values.score` (expected range 0-5) and `opp_score_section.weight` (expected sum 1.0) do not have database-level check constraints.
+3.  **Enum Constraints:** Status columns (e.g., `workflow_status`, `approval_status`, `sync_status`) are implemented as `VARCHAR` without database-level `CHECK` constraints to enforce valid values.
+4.  **NotNull Enforcements:** Several columns in `opportunity` that are logically required (e.g., `workflow_status`) are marked as `nullable=True` in the models.
+
+#### Missing Indexes
+1.  **Foreign Key Indexes:** Most foreign keys (e.g., `opportunity.sales_owner_user_id`, `opp_score_version.opp_id`, `opp_score_values.score_version_id`) lack explicit indexes, which may impact performance as data grows.
+2.  **Workflow Status:** `opportunity.workflow_status` is frequently queried for filtering in the Inbox and Dashboards but lacks an index.
+3.  **Assignment Lookups:** `opportunity_assignment.assigned_to_user_id` is used to build user inboxes but is not indexed.
+4.  **Creation/Submission Dates:** `created_at` and `submitted_at` columns in `opp_score_version` are used for sorting in histories but are not indexed.

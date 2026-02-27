@@ -3,7 +3,7 @@ import os
 import sys
 import httpx
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
@@ -17,10 +17,14 @@ ORACLE_BASE_URL = os.getenv("ORACLE_BASE_URL", "https://eijs-test.fa.em2.oraclec
 ORACLE_USER = os.getenv("ORACLE_USER")
 ORACLE_PASSWORD = os.getenv("ORACLE_PASSWORD", os.getenv("ORACLE_PASS"))
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
+
+from backend.app.core.logging_config import get_logger
+
+logger = get_logger("sync_manager")
+
 def log(msg): 
-    print(msg, flush=True)
-    logging.info(msg)
+    logger.info(msg)
+
 
 from backend.app.core.database import SessionLocal, init_db
 from backend.app.models import Opportunity, Practice
@@ -33,7 +37,7 @@ def map_oracle_to_db(item, db: Session):
         
         # Parse dates
         last_update_str = item.get("LastUpdateDate") or item.get("OptyLastUpdateDate")
-        crm_last_updated_at = datetime.utcnow()
+        crm_last_updated_at = datetime.now(timezone.utc)
         if last_update_str:
             try:
                 crm_last_updated_at = datetime.fromisoformat(last_update_str.replace('Z', '+00:00'))
@@ -155,7 +159,7 @@ def sync_opportunities():
                         db.commit()
                         batch_saved += 1
                         total_saved += 1
-                        print(f"   ✓ Saved: {mapped['opp_name'][:50]}")
+                        logger.info(f"   ✓ Saved: {mapped['opp_name'][:50]}")
                         
                     except Exception as e:
                         db.rollback()

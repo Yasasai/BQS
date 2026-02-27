@@ -5,8 +5,13 @@ from sqlalchemy import desc, or_, and_
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
+
 from backend.app.core.database import get_db
 from backend.app.models import Opportunity, OpportunityAssignment, OppScoreVersion
+from backend.app.core.logging_config import get_logger
+
+logger = get_logger("inbox_router")
+
 
 router = APIRouter(prefix="/api/inbox", tags=["inbox"])
 
@@ -131,7 +136,7 @@ def assign_opportunity(data: AssignInput, db: Session = Depends(get_db)):
     
     # SELF-HEALING: If user not found, create them to unblock demo
     if not sa_user:
-        print(f"⚠️ User {data.sa_email} not found. Auto-creating...")
+        logger.warning(f"⚠️ User {data.sa_email} not found. Auto-creating...")
         
         # Determine Name
         name = "Solution Architect"
@@ -176,7 +181,7 @@ def assign_opportunity(data: AssignInput, db: Session = Depends(get_db)):
     
     if not assigner_user:
         # Fallback mechanism for safety, but log warning
-        print(f"⚠️ Warning: Assigner ID '{assigner_id}' not found. Defaulting to system/first user.")
+        logger.warning(f"⚠️ Warning: Assigner ID '{assigner_id}' not found. Defaulting to system/first user.")
         fallback = db.query(AppUser).first()
         assigner_id = fallback.user_id if fallback else "SYSTEM"
     

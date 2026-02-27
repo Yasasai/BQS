@@ -1,0 +1,72 @@
+# Opportunity Scoring App – Current Implementation Snapshot
+
+This document provides a complete and accurate snapshot of the current implementation state of the Opportunity Scoring Application, based on analysis of the codebase.
+
+## API Endpoints Reference
+
+### Authentication & Users (`auth.py`, `users.py`)
+
+| Endpoint | Purpose | Status | Used by |
+| :--- | :--- | :--- | :--- |
+| `GET /api/auth/users` | Fetches a list of all active users, optionally filtered by role. | Active | Login/Role Selection components |
+| `POST /api/auth/users` | Creates a new user and assigns roles. | Active | User Management (Backend Only) |
+| `GET /api/users/` | Retrieves a list of all users with optional role filtering. | Active | User Context / Sidebar |
+| `POST /api/users/` | Creates a new user. | Active | Backend implementation |
+| `PUT /api/users/{user_id}` | Updates an existing user's details and roles. | Active | Backend implementation |
+
+### Opportunity Inbox (`inbox.py`)
+
+| Endpoint | Purpose | Status | Used by |
+| :--- | :--- | :--- | :--- |
+| `GET /api/inbox/unassigned` | Fetches opportunities not currently assigned to any active user. | Active | `OpportunityInbox.tsx` |
+| `GET /api/inbox/my-assignments` | Fetches opportunities assigned to the currently logged-in user. | Active | `OpportunityInbox.tsx` |
+| `POST /api/inbox/assign` | Assigns an opportunity to a Solution Architect (SA). | Active | `OpportunityInbox.tsx` |
+| `GET /api/inbox/{opp_id}` | Retrieves basic context for a specific opportunity. | Active | `ScoreOpportunity.tsx` |
+
+### Opportunity Management (`opportunities.py`)
+
+| Endpoint | Purpose | Status | Used by |
+| :--- | :--- | :--- | :--- |
+| `GET /api/opportunities/` | Primary list endpoint with heavy filtering, sorting, and tab-based logic. | Active | All Dashboards (`ManagementDashboard`, `SalesHeadDashboard`, etc.) |
+| `GET /api/opportunities/{opp_id}` | Retrieves comprehensive details for a specific opportunity. | Active | `OpportunityDetail.tsx` |
+| `GET /api/opportunities/metadata/{type}` | Fetches metadata for filters (Regions, Practices, Stages, Statuses). | Active | All Dashboards |
+| `POST /api/opportunities/{opp_id}/start-assessment` | Transitions an opportunity to assessment mode and assigns the SA. | Active | `SolutionArchitectDashboard.tsx` |
+| `POST /api/opportunities/{opp_id}/assign` | Assigns a specific role (PH, SH, SA, SP) to an opportunity. | Active | `ManagementDashboard`, `SalesHeadDashboard`, `PracticeHeadDashboard` |
+| `POST /api/opportunities/{opp_id}/approve` | Handles multi-role approval workflow (GH, PH, SH). | Active | `ManagementDashboard`, `SalesHeadDashboard`, `PracticeHeadDashboard`, `ScoreOpportunity.tsx` |
+
+### Scoring & Assessment (`scoring.py`)
+
+| Endpoint | Purpose | Status | Used by |
+| :--- | :--- | :--- | :--- |
+| `GET /api/scoring/{opp_id}/latest` | Fetches the latest score version for an opportunity (with optional user filter). | Active | `ScoreOpportunity.tsx` |
+| `POST /api/scoring/{opp_id}/draft` | Saves current assessment progress as a draft version. | Active | `ScoreOpportunity.tsx` |
+| `POST /api/scoring/{opp_id}/submit` | Submits the final assessment, triggers score calculation and status updates. | Active | `ScoreOpportunity.tsx` |
+| `GET /api/scoring/{opp_id}/combined-review` | Fetches SA and SP assessments side-by-side for comparison. | Active | `ScoreOpportunity.tsx` |
+| `GET /api/scoring/{opp_id}/history` | Retrieves a chronological history of all assessment versions. | Active | `OpportunityDetail.tsx`, `ScoreOpportunity.tsx` |
+| `POST /api/scoring/{opp_id}/new-version` | Clones the latest version to create a new revision round. | Active | `ScoreOpportunity.tsx` |
+| `POST /api/scoring/{opp_id}/reopen` | Moves a submitted assessment back to draft status for rework. | Active | Backend utility |
+| `POST /api/scoring/{opp_id}/review/approve` | Finalizes a specific score version as approved. | Active | `ScoreOpportunity.tsx` |
+| `POST /api/scoring/{opp_id}/review/reject` | Sets a specific score version to rejected status. | Active | `ScoreOpportunity.tsx` |
+
+### System & Utilities (`batch_sync.py`, `upload.py`)
+
+| Endpoint | Purpose | Status | Used by |
+| :--- | :--- | :--- | :--- |
+| `POST /api/batch-sync/start` | Initiates background synchronization with the CRM source. | Active | Backend utility / Admin |
+| `GET /api/batch-sync/status` | Tracks the progress and health of the sync job. | Active | Backend utility / Admin |
+| `POST /api/sync-force` | Triggers an immediate forced synchronization. | Active | `main.py` entry point |
+| `POST /api/upload` | Handles file uploads for assessment documents. | Active | `ScoreOpportunity.tsx` |
+
+## Key Findings & Observations
+
+### 1. Unified Approval Logic
+The application has moved toward a consolidated approval endpoint (`/api/opportunities/{opp_id}/approve`) which handles multiple roles (Global Head, Sales Head, Practice Head) through a standard request schema. This replaced previous per-role endpoints in many parts of the frontend.
+
+### 2. Side-by-Side Assessment
+The `combined-review` endpoint enables the unique "Collaborative Scoring" feature, allowing reviewers to compare Solution Architect (SA) and Sales Person (SP) inputs on the same screen (implemented in `ScoreOpportunity.tsx`).
+
+### 3. Role-Based Dashboarding
+Each major role (GH, SH, PH, SA, SP) has a dedicated dashboard page that utilizes the same `/api/opportunities/` endpoint but passes different `role` and `tab` parameters to filter tasks relevant to their specific workflow stage.
+
+### 4. Legacy Code Warning
+Some screens (e.g., `AssignedToMe.tsx`, `PracticeHeadReview.tsx`) contain experimental or legacy API calls (like `accept-score` or `send-to-practice-head`) that are no longer supported by the active backend routers. The production-ready dashboards use the updated workflow endpoints.

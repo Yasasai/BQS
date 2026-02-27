@@ -4,6 +4,9 @@ import shutil
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from typing import Optional
 import uuid
+from backend.app.core.logging_config import get_logger
+
+logger = get_logger("upload_router")
 
 router = APIRouter(prefix="/api/upload", tags=["upload"])
 
@@ -23,8 +26,9 @@ async def upload_file(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        print(f"✅ File uploaded: {safe_name}")
+        logger.info(f"✅ File uploaded: {safe_name}")
         return {"filename": safe_name, "original_name": file.filename}
     except Exception as e:
-        print(f"❌ Upload Error: {e}")
+        logger.error(f"❌ Upload Error: {e}")
         raise HTTPException(500, f"Upload failed: {str(e)}")
+
