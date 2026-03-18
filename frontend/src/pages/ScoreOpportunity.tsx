@@ -1,14 +1,14 @@
 
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { REASON_OPTIONS, CRITERIA_WEIGHTS } from '../constants/scoringCriteria';
 import { ArrowLeft, Save, Send, AlertTriangle, FileText, Upload, Trash2, CheckCircle, Edit3, RefreshCw, Hash } from 'lucide-react';
 import { ApprovalModal } from '../components/ApprovalModal';
+import apiClient from '../utils/apiClient';
+import { API_ENDPOINTS } from '../constants/apiEndpoints';
 import '../styles/Assessment.css';
 
-const CRITERIA = [
+const DEFAULT_CRITERIA = [
     { key: "STRAT", label: "Strategic Fit", weight: 0.15 },
     { key: "WIN", label: "Win Probability", weight: 0.15 },
     { key: "FIN", label: "Financial Value", weight: 0.15 },
@@ -24,7 +24,8 @@ export const ScoreOpportunity: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const location = useLocation();
-    const { user } = useAuth();
+    const { user, authFetch } = useAuth();
+    const [criteria, setCriteria] = useState<any[]>(DEFAULT_CRITERIA);
 
     const [opp, setOpp] = useState<any>(null);
     const [status, setStatus] = useState("NOT_STARTED");
@@ -45,6 +46,7 @@ export const ScoreOpportunity: React.FC = () => {
 
     // State & Computed
     const [loading, setLoading] = useState(true);
+    const [configError, setConfigError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [history, setHistory] = useState<any[]>([]);
     const [attachmentName, setAttachmentName] = useState<string | null>(null);
@@ -52,14 +54,22 @@ export const ScoreOpportunity: React.FC = () => {
     const [spSubmitted, setSpSubmitted] = useState(false);
     const [deadline, setDeadline] = useState("");
 
-    const isSA = user?.role === 'SA';
-    const isSP = user?.role === 'SP';
+    const [lockedBy, setLockedBy] = useState<string | null>(null);
+    const [lockedAt, setLockedAt] = useState<string | null>(null);
+
+    const [dealValue, setDealValue] = useState<number>(0);
+    const [patMargin, setPatMargin] = useState<number>(0);
+
+    const isBM = user?.role === 'BM';
+    const isSL = user?.role === 'SL';
     const isLocked = ['SUBMITTED', 'READY_FOR_REVIEW', 'APPROVED', 'REJECTED'].includes(status);
     const isDeadlinePassed = deadline ? new Date().getTime() > new Date(deadline).getTime() : false;
-    const isUserSubmitted = (isSA && saSubmitted) || (isSP && spSubmitted);
-    const isReadOnly = isLocked || isUserSubmitted || (!isSA && !isSP);
+    
+    // Lock logic: If locked by someone else, it's read-only
+    const lockedBySomeoneElse = lockedBy && lockedBy !== user?.id;
+    const isReadOnly = isLocked || !isBM || lockedBySomeoneElse;
 
-    const weightedScore = CRITERIA.reduce((acc, c) => acc + (scores[c.key] || 0) * (c.weight * 20), 0);
+    const weightedScore = criteria.reduce((acc, c) => acc + (scores[c.key] || 0) * (c.weight * 20), 0);
 
     useEffect(() => {
         const load = async () => {
@@ -68,38 +78,63 @@ export const ScoreOpportunity: React.FC = () => {
             const forcedVersion = query.get('version');
 
             try {
-                // 1. Fetch Opportunity Context
-                const d = await axios.get(`http://localhost:8000/api/inbox/${id}`);
-                setOpp(d.data);
-                if (d.data.close_date) {
-                    setDeadline(new Date(d.data.close_date).toISOString().split('T')[0]);
+                // 1. Fetch Scoring Configuration (Task 2)
+                try {
+                    const configRes = await apiClient.get(API_ENDPOINTS.SCORING.CONFIG);
+                    if (configRes.status === 200) {
+                        const configData = configRes.data;
+                        setCriteria(configData.map((d: any) => ({
+                            key: d.section_code,
+                            label: d.section_name,
+                            weight: d.weight,
+                            reasons: d.reasons || { critical: [], low: [], average: [], high: [], exceptional: [] }
+                        })));
+                    } else {
+                        setConfigError("Failed to load scoring configuration");
+                    }
+                } catch (err) {
+                    console.error("Config fetch error:", err);
+                    setConfigError("Failed to load scoring configuration");
                 }
 
-                // 2. Fetch Assessment Data
-                const isExecutor = user?.role === 'SA' || user?.role === 'SP';
-                const params = new URLSearchParams();
-                if (isExecutor && !forcedVersion) params.append('user_id', user?.id || '');
-                if (forcedVersion) params.append('version', forcedVersion);
+                // 2. Fetch Opportunity Context
+                const dRes = await apiClient.get(API_ENDPOINTS.INBOX.BY_ID(id));
+                const dData = dRes.data;
+                setOpp(dData);
+                setDealValue(dData.deal_value || 0);
+                setPatMargin(dData.pat_margin || 0);
+                if (dData.close_date) {
+                    setDeadline(new Date(dData.close_date).toISOString().split('T')[0]);
+                }
 
-                const s = await axios.get(`http://localhost:8000/api/scoring/${id}/latest?${params.toString()}`);
-                const currentStatus = s.data.status;
+                // 3. Fetch Assessment Data
+                const isExecutor = isBM;
+                const params: any = {};
+                if (isExecutor && !forcedVersion) params.user_id = user?.id || '';
+                if (forcedVersion) params.version = forcedVersion;
+
+                const sRes = await apiClient.get(API_ENDPOINTS.SCORING.LATEST(id), { params });
+                const sData = sRes.data;
+                const currentStatus = sData.status;
 
                 if (currentStatus !== "NOT_STARTED") {
                     setStatus(currentStatus);
-                    setSaSubmitted(!!s.data.sa_submitted);
-                    setSpSubmitted(!!s.data.sp_submitted);
-                    setCurrentVersion(s.data.version_no);
-                    setPrevAssessment(s.data.prev_assessment);
-                    setSummary(s.data.summary_comment || "");
-                    setConfidence(s.data.confidence_level || "MEDIUM");
-                    setReco(s.data.recommendation || "PURSUE");
-                    setAttachmentName(s.data.attachment_name || null);
+                    setSaSubmitted(!!sData.sa_submitted);
+                    setSpSubmitted(!!sData.sp_submitted);
+                    setCurrentVersion(sData.version_no);
+                    setPrevAssessment(sData.prev_assessment);
+                    setSummary(sData.summary_comment || "");
+                    setConfidence(sData.confidence_level || "MEDIUM");
+                    setReco(sData.recommendation || "PURSUE");
+                    setAttachmentName(sData.attachment_name || null);
+                    setLockedBy(sData.locked_by || null);
+                    setLockedAt(sData.locked_at || null);
 
                     const scoreMap: Record<string, number> = {};
                     const reasonMap: Record<string, string[]> = {};
                     const notesMap: Record<string, string> = {};
 
-                    s.data.sections.forEach((sec: any) => {
+                    sData.sections.forEach((sec: any) => {
                         scoreMap[sec.section_code] = sec.score;
                         reasonMap[sec.section_code] = sec.selected_reasons || [];
                         notesMap[sec.section_code] = sec.notes || "";
@@ -109,29 +144,29 @@ export const ScoreOpportunity: React.FC = () => {
                     setSelectedReasons(reasonMap);
                     setSectionNotes(notesMap);
 
-                    // 2b. If Ready for Review and User is Approver, Try Fetching Combined
-                    const isReady = ['SUBMITTED', 'READY_FOR_REVIEW', 'SA_SUBMITTED', 'SP_SUBMITTED', 'UNDER_REVIEW'].includes(s.data.status) ||
-                        ['READY_FOR_REVIEW', 'SA_SUBMITTED', 'SP_SUBMITTED', 'UNDER_REVIEW'].includes(d.data.workflow_status) ||
-                        d.data.combined_submission_ready;
+                    // 3b. If Ready for Review and User is Approver, Try Fetching Combined
+                    const isReady = ['SUBMITTED', 'READY_FOR_REVIEW', 'SA_SUBMITTED', 'SP_SUBMITTED', 'UNDER_REVIEW'].includes(sData.status) ||
+                        ['READY_FOR_REVIEW', 'SA_SUBMITTED', 'SP_SUBMITTED', 'UNDER_REVIEW'].includes(dData.workflow_status) ||
+                        dData.combined_submission_ready;
                     if (isReady && isApprover) {
                         try {
-                            const cParams = forcedVersion ? `?version_no=${forcedVersion}` : '';
-                            const c = await axios.get(`http://localhost:8000/api/scoring/${id}/combined-review${cParams}`);
-                            setCombinedData(c.data);
+                            const cParams = forcedVersion ? { version_no: forcedVersion } : {};
+                            const cRes = await apiClient.get(API_ENDPOINTS.SCORING.COMBINED_REVIEW(id), { params: cParams });
+                            setCombinedData(cRes.data);
                         } catch (e) { console.warn("Could not fetch combined data", e); }
                     }
 
                 } else {
-                    setCurrentVersion(s.data.version_no || 1);
-                    setPrevAssessment(s.data.prev_assessment);
+                    setCurrentVersion(sData.version_no || 1);
+                    setPrevAssessment(sData.prev_assessment);
                     const initialScores: Record<string, number> = {};
-                    CRITERIA.forEach(c => initialScores[c.key] = 0.0);
+                    criteria.forEach(c => initialScores[c.key] = 0.0);
                     setScores(initialScores);
                 }
 
-                // 3. Fetch History
-                const h = await axios.get(`http://localhost:8000/api/scoring/${id}/history`);
-                setHistory(h.data);
+                // 4. Fetch History
+                const hRes = await apiClient.get(API_ENDPOINTS.SCORING.HISTORY(id));
+                setHistory(hRes.data);
 
             } catch (err) {
                 console.error("Load Error", err);
@@ -162,7 +197,7 @@ export const ScoreOpportunity: React.FC = () => {
                 alert("A detailed Overall Justification Rationale (min 20 characters) is MANDATORY for submission.");
                 return;
             }
-            for (const c of CRITERIA) {
+            for (const c of criteria) {
                 const score = scores[c.key] !== undefined ? scores[c.key] : 0.0;
                 const reasons = selectedReasons[c.key] || [];
                 const notes = sectionNotes[c.key] || "";
@@ -179,7 +214,7 @@ export const ScoreOpportunity: React.FC = () => {
         try {
             const payload = {
                 user_id: user.id,
-                sections: CRITERIA.map(c => ({
+                sections: criteria.map(c => ({
                     section_code: c.key,
                     score: scores[c.key] !== undefined ? scores[c.key] : 0.0,
                     notes: sectionNotes[c.key] || "",
@@ -188,11 +223,24 @@ export const ScoreOpportunity: React.FC = () => {
                 confidence_level: confidence,
                 recommendation: reco,
                 summary_comment: summary,
-                attachment_name: attachmentName
+                attachment_name: attachmentName,
+                financials: {
+                    deal_value: dealValue,
+                    pat_margin: patMargin
+                }
             };
 
-            const endpoint = isSubmit ? 'submit' : 'draft';
-            await axios.post(`http://localhost:8000/api/scoring/${id}/${endpoint}`, payload);
+            const endpoint = isSubmit ? API_ENDPOINTS.SCORING.SUBMIT(id) : API_ENDPOINTS.SCORING.DRAFT(id);
+            const res = await apiClient.post(endpoint, payload);
+
+            if (res.status === 409) {
+                const errorData = await res.json();
+                alert(errorData.detail || "This assessment is currently being edited by another user.");
+                // Update lock status locally to show warning
+                return;
+            }
+
+            if (!res.ok) throw new Error("Submission failed");
 
             alert(isSubmit ? "Assessment Submitted Successfully!" : "Draft Saved.");
             navigate('/assigned-to-me');
@@ -215,7 +263,7 @@ export const ScoreOpportunity: React.FC = () => {
         if (!id || !approvalAction) return;
         setIsSaving(true);
         try {
-            await axios.post(`http://localhost:8000/api/opportunities/${id}/approve`, {
+            await apiClient.post(API_ENDPOINTS.OPPORTUNITIES.APPROVE(id || ''), {
                 role: user?.role,
                 decision: approvalAction,
                 user_id: user?.id,
@@ -236,11 +284,25 @@ export const ScoreOpportunity: React.FC = () => {
         if (!confirm("Starting a new version will copy data from the latest version. Proceed?")) return;
         setIsSaving(true);
         try {
-            await axios.post(`http://localhost:8000/api/scoring/${id}/new-version`);
+            await apiClient.post(API_ENDPOINTS.SCORING.NEW_VERSION(id || ''));
             alert("New Version Created.");
             window.location.reload();
         } catch (err) {
             alert("Failed to create new version.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleReopen = async () => {
+        if (!confirm("Are you sure you want to re-open this assessment for editing?")) return;
+        setIsSaving(true);
+        try {
+            await apiClient.post(API_ENDPOINTS.SCORING.REOPEN(id || ''));
+            alert("Assessment re-opened as draft.");
+            window.location.reload();
+        } catch (err) {
+            alert("Failed to re-open assessment.");
         } finally {
             setIsSaving(false);
         }
@@ -252,7 +314,9 @@ export const ScoreOpportunity: React.FC = () => {
             const formData = new FormData();
             formData.append("file", file);
             try {
-                const res = await axios.post('http://localhost:8000/api/upload', formData);
+                const res = await apiClient.post(API_ENDPOINTS.UPLOAD, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
                 setAttachmentName(res.data.filename);
             } catch (err) {
                 alert("Upload failed.");
@@ -271,6 +335,7 @@ export const ScoreOpportunity: React.FC = () => {
     };
 
     if (loading) return <div className="p-loader">Retrieving Critical Data...</div>;
+    if (configError) return <div className="p-loader text-red-500 bg-red-50 p-6 rounded-xl border border-red-200">{configError}</div>;
     if (!opp) return <div className="p-loader text-red-500">Opportunity Not Found</div>;
 
     const saAssessment = combinedData?.sa_assessment;
@@ -299,10 +364,17 @@ export const ScoreOpportunity: React.FC = () => {
                             <button onClick={() => openApprovalModal('APPROVE')} className="px-6 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 shadow-md transition-all">APPROVE</button>
                         </div>
                     )}
-                    {(isSA || isSP) && isLocked && !isDeadlinePassed && (
-                        <button onClick={handleNewVersion} className="flex items-center gap-1 px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold hover:bg-blue-100 shadow-sm">
-                            <RefreshCw size={14} /> Create New Version
-                        </button>
+                    {isBM && isLocked && !isDeadlinePassed && (
+                        <div className="flex gap-2">
+                            {status === 'SUBMITTED' && (
+                                <button onClick={handleReopen} className="flex items-center gap-1 px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold hover:bg-amber-100 shadow-sm">
+                                    <RefreshCw size={14} /> Re-open Assessment
+                                </button>
+                            )}
+                            <button onClick={handleNewVersion} className="flex items-center gap-1 px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold hover:bg-blue-100 shadow-sm">
+                                <RefreshCw size={14} /> Create New Version
+                            </button>
+                        </div>
                     )}
                 </div>
             </header>
@@ -312,6 +384,12 @@ export const ScoreOpportunity: React.FC = () => {
                     {isLocked && !isApprover && (
                         <div className="bg-amber-600 text-white px-6 py-2 font-black text-center text-xs tracking-[0.2em] uppercase mb-4 shadow-lg">
                             ⚠️ READ ONLY RECORD - Assessment Finalized
+                        </div>
+                    )}
+
+                    {lockedBySomeoneElse && (
+                        <div className="bg-red-600 text-white px-6 py-2 font-black text-center text-xs tracking-[0.2em] uppercase mb-4 shadow-lg animate-pulse">
+                            ⚠️ CONCURRENCY LOCK - This assessment is currently being edited by another user
                         </div>
                     )}
 
@@ -372,11 +450,30 @@ export const ScoreOpportunity: React.FC = () => {
                             </div>
                             <div className="context-item">
                                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Revenue (USD)</label>
-                                <div className="text-lg font-bold text-green-600">${opp.deal_value?.toLocaleString() || '0'}</div>
+                                {!isReadOnly ? (
+                                    <input 
+                                        type="number" 
+                                        value={dealValue} 
+                                        onChange={(e) => setDealValue(parseFloat(e.target.value))}
+                                        className="text-lg font-bold text-green-600 bg-transparent border-b border-green-200 outline-none focus:border-green-500 w-full"
+                                    />
+                                ) : (
+                                    <div className="text-lg font-bold text-green-600">${dealValue?.toLocaleString() || '0'}</div>
+                                )}
                             </div>
                             <div className="context-item">
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Current Status</label>
-                                <div className="text-lg font-bold text-blue-600">{(opp.workflow_status || 'NEW').replace(/_/g, ' ')}</div>
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">PAT Margin (%)</label>
+                                {!isReadOnly ? (
+                                    <input 
+                                        type="number" 
+                                        step="0.1"
+                                        value={patMargin} 
+                                        onChange={(e) => setPatMargin(parseFloat(e.target.value))}
+                                        className="text-lg font-bold text-purple-600 bg-transparent border-b border-purple-200 outline-none focus:border-purple-500 w-full"
+                                    />
+                                ) : (
+                                    <div className="text-lg font-bold text-purple-600">{patMargin || 0}%</div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -391,9 +488,9 @@ export const ScoreOpportunity: React.FC = () => {
                     </div>
 
                     <div className="scoring-grid space-y-8 px-6 pb-12">
-                        {CRITERIA.map((c) => {
+                        {criteria.map((c) => {
                             const currentScore = scores[c.key] !== undefined ? scores[c.key] : 0.0;
-                            const options = REASON_OPTIONS[c.key] || { critical: [], low: [], average: [], high: [], exceptional: [] };
+                            const options = c.reasons || { critical: [], low: [], average: [], high: [], exceptional: [] };
 
                             let reasonPool = options.average;
                             if (currentScore >= 4.5) reasonPool = options.exceptional;
@@ -420,10 +517,10 @@ export const ScoreOpportunity: React.FC = () => {
                                                 <div className="flex flex-col items-end gap-1.5">
                                                     <div className="flex gap-2">
                                                         <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter ${combinedData.sa_submitted ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'}`}>
-                                                            SA: {combinedData.sa_submitted ? (saSec?.score || '0.0') : 'N/P'}
+                                                            SA: {combinedData.sa_submitted ? (saSec?.score?.toFixed(1) || '0.0') : 'N/P'}
                                                         </span>
                                                         <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter ${combinedData.sp_submitted ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-400'}`}>
-                                                            SP: {combinedData.sp_submitted ? (spSec?.score || '0.0') : 'N/P'}
+                                                            SP: {combinedData.sp_submitted ? (spSec?.score?.toFixed(1) || '0.0') : 'N/P'}
                                                         </span>
                                                     </div>
                                                     {(!combinedData.sa_submitted || !combinedData.sp_submitted) && (
@@ -461,7 +558,7 @@ export const ScoreOpportunity: React.FC = () => {
                                         <div>
                                             <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-4">Drivers & Rationales</label>
                                             <div className="grid grid-cols-1 gap-2">
-                                                {reasonPool.map(r => (
+                                                {(reasonPool || []).map((r: string) => (
                                                     <label
                                                         key={r}
                                                         className={`flex items-center gap-3 p-3 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${(selectedReasons[c.key] || []).includes(r)
@@ -564,7 +661,7 @@ export const ScoreOpportunity: React.FC = () => {
                         <div className="mb-12">
                             <label className="block text-gray-400 font-bold uppercase tracking-widest text-xs mb-4">Supporting Evidence / Attachments</label>
                             <div className="flex flex-wrap gap-4">
-                                {!attachmentName ? (
+                                {isBM && !attachmentName && !isReadOnly ? (
                                     <div className="flex-1">
                                         <label className="attachment-section group">
                                             <input type="file" className="hidden" onChange={handleFileUpload} disabled={isReadOnly} />
@@ -576,15 +673,17 @@ export const ScoreOpportunity: React.FC = () => {
                                         </label>
                                     </div>
                                 ) : (
-                                    <div className="file-pill">
-                                        <FileText size={16} className="text-blue-600" />
-                                        <span className="truncate max-w-[200px]">{attachmentName}</span>
-                                        {!isReadOnly && (
-                                            <button onClick={() => setAttachmentName(null)} className="trash-btn">
-                                                <Trash2 size={14} />
-                                            </button>
-                                        )}
-                                    </div>
+                                    attachmentName && (
+                                        <div className="file-pill">
+                                            <FileText size={16} className="text-blue-600" />
+                                            <span className="truncate max-w-[200px]">{attachmentName}</span>
+                                            {!isReadOnly && (
+                                                <button onClick={() => setAttachmentName(null)} className="trash-btn">
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    )
                                 )}
                             </div>
                         </div>

@@ -1,5 +1,6 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import apiClient from '../utils/apiClient';
+import { API_ENDPOINTS } from '../constants/apiEndpoints';
 
 export interface User {
     user_id: string;
@@ -29,15 +30,15 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        fetch('http://localhost:8000/api/auth/users')
-            .then(res => res.json())
-            .then(data => {
+        apiClient.get(API_ENDPOINTS.AUTH.USERS)
+            .then(res => {
+                const data = res.data;
                 setAvailableUsers(data);
                 if (data.length > 0) setCurrentUser(data[0]);
                 setIsLoading(false);
             })
             .catch(err => {
-                console.error(err);
+                console.error("❌ Failed to fetch users in UserContext:", err);
                 setIsLoading(false);
             });
     }, []);

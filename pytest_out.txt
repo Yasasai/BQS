@@ -1,0 +1,12 @@
+ImportError while loading conftest 'C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\tests\conftest.py'.
+backend\tests\conftest.py:20: in <module>
+    from backend.app.main import app
+backend\app\main.py:16: in <module>
+    from backend.app.routers import auth, inbox, scoring, batch_sync, upload, opportunities
+backend\app\routers\__init__.py:2: in <module>
+    from . import auth, inbox, scoring, opportunities, users
+backend\app\routers\auth.py:8: in <module>
+    from backend.app.core.auth import create_access_token, get_current_user
+backend\app\core\auth.py:4: in <module>
+    from jose import JWTError, jwt
+E   ModuleNotFoundError: No module named 'jose'

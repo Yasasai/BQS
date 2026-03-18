@@ -8,26 +8,21 @@ from dotenv import load_dotenv
 
 # Path setup
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-load_dotenv(os.path.join(BASE_DIR, '.env'))
-
-# Configuration
-ORACLE_BASE_URL = os.getenv("ORACLE_BASE_URL")
-ORACLE_USER = os.getenv("ORACLE_USER")
-ORACLE_PASSWORD = os.getenv("ORACLE_PASSWORD")
+from backend.app.services.oracle_service import ORACLE_USER, ORACLE_PASS, ORACLE_REST_ROOT
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def diagnose():
-    if not ORACLE_BASE_URL:
-        print("❌ ORACLE_BASE_URL not set.")
+    if not ORACLE_REST_ROOT:
+        print("❌ ORACLE_REST_ROOT not set.")
         return
 
-    auth = requests.auth.HTTPBasicAuth(ORACLE_USER, ORACLE_PASSWORD)
+    auth = requests.auth.HTTPBasicAuth(ORACLE_USER, ORACLE_PASS)
     
     # 1. Inspect "Describe" to find exact field names
     print("\n🔍 --- 1. Fetching Field Description ---")
-    desc_url = f"{ORACLE_BASE_URL}/crmRestApi/resources/11.12.1.0/opportunities/describe"
+    desc_url = f"{ORACLE_REST_ROOT}/opportunities/describe"
     try:
         resp = requests.get(desc_url, auth=auth, timeout=30)
         if resp.ok:

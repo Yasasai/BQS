@@ -1,0 +1,47 @@
+# Opportunity Scoring App – Current Implementation Snapshot
+## Section 7 — Configuration
+
+### 1. Configuration Files
+The application uses a mix of environment-based configuration and hardcoded constants distributed across the root, backend, and frontend.
+
+| File Path | Purpose |
+| :--- | :--- |
+| [root] `/.env` | Core environment variables for Oracle CRM and Database connectivity. |
+| [root] `/oracle_api_config.txt` | Auto-discovered Oracle API endpoints and versioning metadata. |
+| `backend/constants.py` | Centralized Python enums for workflow statuses, roles, and API paths. |
+| `backend/app/core/database.py` | Database initialization and seeding configuration. |
+| `frontend/src/context/UserContext.tsx` | Frontend user session and API base URL configuration. |
+| `frontend/src/constants/scoringCriteria.ts` | Hardcoded scoring weights and reason options. |
+
+---
+
+### 2. Configurable Items (Environment Variables)
+These values are read from the system environment or the root `.env` file, allowing deployment-specific changes without code modification.
+
+*   **Oracle CRM Integration**:
+    *   `ORACLE_BASE_URL`: The root URL for the Oracle Cloud instance.
+    *   `ORACLE_USER`: API authentication username.
+    *   `ORACLE_PASSWORD`: API authentication password.
+    *   `ORACLE_API_VERSION`: Specified API version (e.g., `11.12.1.0` or `latest`).
+*   **Database Connectivity**:
+    *   `DATABASE_URL`: SQLAlchemy connection string (e.g., `postgresql://user:pass@host:port/dbname`).
+
+---
+
+### 3. Hardcoded Items
+The following items are defined within the source code and require a code change to update.
+
+#### **Backend (Python)**
+*   **Workflow Logic**: Enums for `WorkflowStatus` (e.g., `NEW_FROM_CRM`, `ASSIGNED_TO_SA`) and `UserRole` (e.g., `Management`, `Practice Head`).
+*   **Database Seed Data**: Default roles, initial administrative users, and scoring section definitions (names/order) are hardcoded in the `init_db()` function within `backend/app/core/database.py`.
+*   **Creation Credentials**: Default PostgreSQL credentials (`postgres`/`Abcd1234`) used for the initial database creation script.
+*   **API Routes**: Endpoint path strings (e.g., `/api/opportunities`) are defined as constants.
+
+#### **Frontend (TypeScript/React)**
+*   **API Base URL**: The backend service URL (`http://localhost:8000`) is hardcoded in multiple components and contexts (e.g., `UserContext.tsx`, `OpportunityInbox.tsx`).
+*   **Scoring Weights**: Specific weights for scoring criteria (e.g., `STRAT: 0.15`, `WIN: 0.15`) are hardcoded in `scoringCriteria.ts`.
+*   **Reason Options**: The qualitative options for scoring justifications (e.g., "Extreme Misalignment", "Competitor Stronghold") are hardcoded in `scoringCriteria.ts`.
+*   **Navigation Routes**: All UI routes and role-based redirect paths are hardcoded in `App.tsx`.
+
+#### **Database Schema Management**
+*   **Dynamic Column Healing**: `backend/app/core/self_healing.py` contains hardcoded logic to detect missing columns (like `selected_reasons` or `workflow_status`) and add them via SQL `ALTER TABLE` commands on startup.

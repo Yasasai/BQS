@@ -3,6 +3,8 @@ import { Opportunity } from '../types';
 import { TopBar } from '../components/TopBar';
 import { ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import apiClient from '../utils/apiClient';
+import { API_ENDPOINTS } from '../constants/apiEndpoints';
 
 type AssessmentStatus = 'not-started' | 'draft' | 'submitted';
 
@@ -28,34 +30,34 @@ export function AssignedToMe() {
         fetchAssignedOpportunities();
     }, []);
 
-    const fetchAssignedOpportunities = () => {
+    const fetchAssignedOpportunities = async () => {
         setLoading(true);
-        fetch('http://localhost:8000/api/opportunities')
-            .then(res => res.json())
-            .then(data => {
-                // Filter only assigned opportunities (those with sales_owner)
-                const assigned = data.filter((opp: Opportunity) =>
-                    opp.sales_owner && opp.sales_owner !== 'N/A'
-                );
+        try {
+            const res = await apiClient.get(API_ENDPOINTS.OPPORTUNITIES.BASE);
+            const data = res.data.items || [];
+            
+            // Filter only assigned opportunities (those with sales_owner)
+            const assigned = data.filter((opp: Opportunity) =>
+                opp.sales_owner && opp.sales_owner !== 'N/A'
+            );
 
-                // Mock assessment status for demo - in real app, fetch from assessments table
-                const withAssessments = assigned.map((opp: Opportunity) => ({
-                    ...opp,
-                    assessment_status: Math.random() > 0.5 ? 'submitted' :
-                        Math.random() > 0.5 ? 'draft' : 'not-started',
-                    score: Math.random() > 0.3 ? Math.floor(Math.random() * 40) + 60 : undefined,
-                    score_status: Math.random() > 0.5 ? 'Submitted' :
-                        Math.random() > 0.5 ? 'Draft' : 'Not Started',
-                    scored_by: opp.sales_owner
-                }));
+            // Mock assessment status for demo - in real app, fetch from assessments table
+            const withAssessments = assigned.map((opp: Opportunity) => ({
+                ...opp,
+                assessment_status: Math.random() > 0.5 ? 'submitted' :
+                    Math.random() > 0.5 ? 'draft' : 'not-started',
+                score: Math.random() > 0.3 ? Math.floor(Math.random() * 40) + 60 : undefined,
+                score_status: Math.random() > 0.5 ? 'Submitted' :
+                    Math.random() > 0.5 ? 'Draft' : 'Not Started',
+                scored_by: opp.sales_owner
+            }));
 
-                setOpportunities(withAssessments);
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error("Failed to fetch opportunities", err);
-                setLoading(false);
-            });
+            setOpportunities(withAssessments);
+        } catch (err) {
+            console.error("❌ Failed to fetch opportunities in AssignedToMe", err);
+        } finally {
+            setLoading(false);
+        }
     };
 
     // Filter opportunities based on active tab and filters
@@ -320,23 +322,15 @@ export function AssignedToMe() {
                                                     onClick={async (e) => {
                                                         e.stopPropagation();
                                                         try {
-                                                            const response = await fetch(`http://localhost:8000/api/opportunities/${opp.id}/send-to-practice-head`, {
-                                                                method: 'POST',
-                                                                headers: { 'Content-Type': 'application/json' },
-                                                                body: JSON.stringify({
-                                                                    score: opp.score || opp.win_probability,
-                                                                    notes: opp.sa_notes || 'Assessment completed'
-                                                                })
+                                                            await apiClient.post(API_ENDPOINTS.OPPORTUNITIES.SEND_TO_PH(String(opp.id)), {
+                                                                score: opp.score || opp.win_probability,
+                                                                notes: (opp as any).sa_notes || 'Assessment completed'
                                                             });
 
-                                                            if (response.ok) {
-                                                                alert(`✓ Score submitted to Practice Head for review`);
-                                                                fetchAssignedOpportunities(); // Refresh the list
-                                                            } else {
-                                                                alert('Failed to submit. Please try again.');
-                                                            }
+                                                            alert(`✓ Score submitted to Practice Head for review`);
+                                                            fetchAssignedOpportunities(); // Refresh the list
                                                         } catch (error) {
-                                                            console.error('Error submitting to PH:', error);
+                                                            console.error('❌ Error submitting to PH:', error);
                                                             alert('Error submitting. Please try again.');
                                                         }
                                                     }}

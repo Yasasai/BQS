@@ -5,30 +5,71 @@ from requests.auth import HTTPBasicAuth
 import logging
 import os
 import base64
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
-# Load env with absolute path to ensure it's found
-# .../BQS/backend/app/services/oracle_service.py -> .../BQS/.env
-base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-env_path = os.path.join(base_dir, '.env')
-load_dotenv(dotenv_path=env_path)
+# Configuration Loading
+def load_oracle_config():
+    """Loads Oracle configuration with priority: .env > oracle_api_config.txt > defaults"""
+    # Base directory is BQS root
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    
+    config = {
+        "ORACLE_BASE_URL": os.getenv("ORACLE_BASE_URL", "https://eijs-test.fa.em2.oraclecloud.com"),
+        "ORACLE_API_VERSION": os.getenv("ORACLE_API_VERSION", "latest"),
+        "ORACLE_USER": os.getenv("ORACLE_USER"),
+        "ORACLE_PASS": os.getenv("ORACLE_PASSWORD", os.getenv("ORACLE_PASS")),
+        "ORACLE_TOKEN_URL": os.getenv("ORACLE_TOKEN_URL"),
+        "ORACLE_CLIENT_ID": os.getenv("ORACLE_CLIENT_ID"),
+        "ORACLE_CLIENT_SECRET": os.getenv("ORACLE_CLIENT_SECRET"),
+    }
 
-# Configuration
-ORACLE_BASE_URL = os.getenv("ORACLE_BASE_URL", "https://eijs-test.fa.em2.oraclecloud.com")
-ORACLE_API_VERSION = os.getenv("ORACLE_API_VERSION", "latest")  # Can be 'latest' or specific like '11.12.1.0'
-ORACLE_TOKEN_URL = os.getenv("ORACLE_TOKEN_URL")
-ORACLE_CLIENT_ID = os.getenv("ORACLE_CLIENT_ID")
-ORACLE_CLIENT_SECRET = os.getenv("ORACLE_CLIENT_SECRET")
-ORACLE_SCOPE = os.getenv("ORACLE_SCOPE", f"{ORACLE_BASE_URL}/crmRestApi/resources/{ORACLE_API_VERSION}/")
+    # Load from auto-discovered config file if it exists at root
+    config_file = os.path.join(base_dir, "oracle_api_config.txt")
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if "=" in line and not line.startswith("#"):
+                        key, val = line.split("=", 1)
+                        # Only use from file if not already set in .env
+                        if not os.getenv(key):
+                            config[key] = val
+        except Exception as e:
+            pass
 
-# Fallback to Basic Auth
-ORACLE_USER = os.getenv("ORACLE_USER")
-ORACLE_PASS = os.getenv("ORACLE_PASSWORD", os.getenv("ORACLE_PASS"))
+    # Standardize the Base URL
+    if "/crmRestApi/resources/" in config["ORACLE_BASE_URL"]:
+        parts = config["ORACLE_BASE_URL"].split("/crmRestApi/resources/")
+        config["TRUE_BASE"] = parts[0]
+        config["AUTO_VERSION"] = parts[1].strip("/")
+    else:
+        config["TRUE_BASE"] = config["ORACLE_BASE_URL"].rstrip("/")
+        config["AUTO_VERSION"] = config["ORACLE_API_VERSION"]
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+    return config
+
+_ORACLE_CONFIG = load_oracle_config()
+ORACLE_BASE_URL = _ORACLE_CONFIG["TRUE_BASE"]
+ORACLE_API_VERSION = _ORACLE_CONFIG["AUTO_VERSION"]
+ORACLE_TOKEN_URL = _ORACLE_CONFIG["ORACLE_TOKEN_URL"]
+ORACLE_CLIENT_ID = _ORACLE_CONFIG["ORACLE_CLIENT_ID"]
+ORACLE_CLIENT_SECRET = _ORACLE_CONFIG["ORACLE_CLIENT_SECRET"]
+ORACLE_USER = _ORACLE_CONFIG["ORACLE_USER"]
+ORACLE_PASS = _ORACLE_CONFIG["ORACLE_PASS"]
+
+# Construct derived values
+ORACLE_REST_ROOT = f"{ORACLE_BASE_URL}/crmRestApi/resources/{ORACLE_API_VERSION}"
+ORACLE_SCOPE = os.getenv("ORACLE_SCOPE", f"{ORACLE_REST_ROOT}/")
+
+
+from backend.app.core.logging_config import setup_logging, get_logger
+
+# Setup standardized logging
+setup_logging()
+logger = get_logger("oracle_service")
+
 
 def get_robust_session():
     """Returns a requests Session with built-in retries and timeouts"""
@@ -74,8 +115,11 @@ def get_oracle_token():
 
 def get_from_oracle(endpoint, params=None):
     """Generic Oracle API Caller with Bearer token and robust session"""
+    logger.info("STAGE 2: Entering Oracle API extractor function.")
+    logger.info(f"STAGE 2b: Config Check - URL: {os.getenv('ORACLE_BASE_URL')} | USER: {os.getenv('ORACLE_USER')}")
+    
     token = get_oracle_token()
-    url = f"{ORACLE_BASE_URL}/crmRestApi/resources/{ORACLE_API_VERSION}/{endpoint}"
+    url = f"{ORACLE_REST_ROOT}/{endpoint}"
     
     headers = {"Content-Type": "application/json"}
     auth = None
@@ -94,14 +138,14 @@ def get_from_oracle(endpoint, params=None):
         from urllib.parse import urlencode
         if params:
             debug_url = f"{url}?{urlencode(params)}"
-            logger.info(f"API Request: GET {debug_url}")
+            logger.info(f"STAGE 3: Making HTTP GET to: {url} with params: {params}")
         else:
-            logger.info(f"API Request: GET {url}")
+            logger.info(f"STAGE 3: Making HTTP GET to: {url} with params: None")
         
         response = session.get(url, headers=headers, auth=auth, params=params, timeout=90)
         
         # DEBUG: Log Status and Raw Body
-        logger.info(f"Response Status: {response.status_code}")
+        logger.info(f"STAGE 4: Received HTTP {response.status_code} from Oracle.")
         
         # Log the actual URL that was called
         logger.info(f"Actual URL: {response.url}")
@@ -244,7 +288,7 @@ def map_oracle_to_db(item):
                 return None
 
         last_update_str = item.get("LastUpdateDate") or item.get("OptyLastUpdateDate")
-        crm_last_updated_at = parse_date(last_update_str) or datetime.utcnow()
+        crm_last_updated_at = parse_date(last_update_str) or datetime.now(timezone.utc)
         
         close_date = None
         eff_date = item.get("EffectiveDate")
@@ -284,7 +328,7 @@ def sync_opportunities_to_db(db_session=None):
     db = db_session or SessionLocal()
     total_processed = 0
     total_saved = 0
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
 
     logger.info("Starting robust synchronization...")
 
@@ -338,7 +382,7 @@ def sync_opportunities_to_db(db_session=None):
         if not meta:
             meta = SyncMeta(meta_key="oracle_sync_v2")
             db.add(meta)
-        meta.last_sync_timestamp = datetime.utcnow()
+        meta.last_sync_timestamp = datetime.now(timezone.utc)
         meta.sync_status = "SUCCESS"
         meta.records_processed = total_saved
         db.commit()
@@ -350,7 +394,7 @@ def sync_opportunities_to_db(db_session=None):
         if not db_session:
             db.close()
             
-    duration = (datetime.utcnow() - start_time).total_seconds()
+    duration = (datetime.now(timezone.utc) - start_time).total_seconds()
     logger.info(f"Sync Complete! Processed: {total_processed}, Saved: {total_saved} in {duration:.2f}s")
     return {"processed": total_processed, "saved": total_saved}
 

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Inbox, User, LogOut, LayoutDashboard, FileText, CheckCircle, AlertCircle, PlayCircle, ChevronUp, ChevronDown, GripHorizontal } from 'lucide-react';
+import { Home, Inbox, User, LogOut, LayoutDashboard, FileText, CheckCircle, AlertCircle, PlayCircle, ChevronUp, ChevronDown, GripHorizontal, RefreshCw, Settings } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -8,7 +8,50 @@ export function Sidebar() {
     const navigate = useNavigate();
     const location = useLocation();
     const { availableUsers, switchUser } = useUser();
-    const { user, login } = useAuth();
+    const { user, login, authFetch, logout } = useAuth();
+
+    // Sync state
+    const [syncStatus, setSyncStatus] = useState<any>(null);
+    const [isSyncing, setIsSyncing] = useState(false);
+
+    const fetchSyncStatus = useCallback(async () => {
+        try {
+            const res = await authFetch('/api/batch-sync/status');
+            if (res.ok) {
+                const data = await res.json();
+                if (data.status === 'success') {
+                    setSyncStatus(data);
+                }
+            }
+        } catch (e) {
+            console.error("Failed to fetch sync status", e);
+        }
+    }, [authFetch]);
+
+    useEffect(() => {
+        if (user) {
+            fetchSyncStatus();
+            const interval = setInterval(fetchSyncStatus, 5 * 60 * 1000); // 5 min
+            return () => clearInterval(interval);
+        }
+    }, [user, fetchSyncStatus]);
+
+    const handleSyncNow = async () => {
+        setIsSyncing(true);
+        try {
+            await authFetch('/api/batch-sync/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ batch_size: 50, sync_name: 'oracle_opportunities_manual' })
+            });
+            setTimeout(fetchSyncStatus, 2000);
+        } catch (e) {
+            console.error(e);
+            alert('Failed to start sync');
+        } finally {
+            setIsSyncing(false);
+        }
+    };
 
     // Resizable slider state
     const [sliderHeight, setSliderHeight] = useState(250);
@@ -50,29 +93,35 @@ export function Sidebar() {
     const handleUserSwitch = (u: any) => {
         switchUser(u.user_id);
         const roles = (u.roles || []).map((r: string) => r.toUpperCase());
-        let targetRole: 'GH' | 'PH' | 'SH' | 'SA' | 'SP' = 'SA';
+        let targetRole: 'GH' | 'PH' | 'SH' | 'SA' | 'SP' | 'PSH' | 'LEGAL' | 'FINANCE' = 'SA';
 
         if (roles.includes("MANAGEMENT") || roles.includes("GH") || roles.includes("GLOBAL_HEAD")) targetRole = 'GH';
+        else if (roles.includes("PSH") || roles.includes("PRESALES_HEAD")) targetRole = 'PSH';
         else if (roles.includes("PRACTICE_HEAD") || roles.includes("PH")) targetRole = 'PH';
         else if (roles.includes("SALES_HEAD") || roles.includes("SH") || roles.includes("SALES_LEAD")) targetRole = 'SH';
         else if (roles.includes("SALES_PERSON") || roles.includes("SP") || roles.includes("SALES_REPRESENTATIVE")) targetRole = 'SP';
         else if (roles.includes("SOLUTION_ARCHITECT") || roles.includes("SA")) targetRole = 'SA';
+        else if (roles.includes("LEGAL") || roles.includes("LL")) targetRole = 'LEGAL';
+        else if (roles.includes("FINANCE") || roles.includes("FIN")) targetRole = 'FINANCE';
 
         login(targetRole, {
             id: u.user_id,
             email: u.email,
             name: u.display_name,
             role: targetRole,
-            displayRole: targetRole === 'GH' ? 'Global Head' :
-                targetRole === 'PH' ? 'Practice Head' :
-                    targetRole === 'SH' ? 'Sales Head' :
-                        targetRole === 'SP' ? 'Sales Representative' : 'Solution Architect'
+                        displayRole: targetRole === 'GH' ? 'Global Head' :
+                            targetRole === 'PSH' ? 'Presales Head' :
+                                targetRole === 'PH' ? 'Practice Head' :
+                                    targetRole === 'SH' ? 'Sales Head' :
+                                        targetRole === 'SP' ? 'Sales Representative' :
+                                            targetRole === 'LEGAL' ? 'Legal Lead' :
+                                                targetRole === 'FINANCE' ? 'Finance Controller' : 'Solution Architect'
         });
 
-        if (targetRole === 'GH') navigate('/management/all');
+        if (targetRole === 'GH' || targetRole === 'PSH') navigate('/management/all');
         else if (targetRole === 'PH') navigate('/practice-head/dashboard');
         else if (targetRole === 'SH') navigate('/sales/action-required');
-        else if (targetRole === 'SA' || targetRole === 'SP') navigate('/assigned-to-me');
+        else if (targetRole === 'SA' || targetRole === 'SP' || targetRole === 'LEGAL' || targetRole === 'FINANCE') navigate('/assigned-to-me');
     };
 
     return (
@@ -90,8 +139,8 @@ export function Sidebar() {
                     <span className="text-sm">Home</span>
                 </div>
 
-                {/* GH Navigation */}
-                {user.role === 'GH' && (
+                {/* GH & PSH Navigation */}
+                {['GH', 'PSH'].includes(user.role) && (
                     <>
                         <div className="px-6 pt-4 pb-1 text-[10px] font-bold text-gray-400 uppercase">Management</div>
                         <div onClick={() => navigate('/management/dashboard')} className={`flex items-center gap-3 px-6 py-2 cursor-pointer ${isPathActive('/management/dashboard') ? 'bg-white text-black font-bold border-r-4 border-[#5c5c5c]' : 'text-gray-600 hover:bg-gray-100'}`}>
@@ -101,10 +150,21 @@ export function Sidebar() {
                     </>
                 )}
 
+                {/* Administration (GH Only) */}
+                {user.role === 'GH' && (
+                    <div onClick={() => navigate('/admin')} className={`flex items-center gap-3 px-6 py-2 cursor-pointer ${isPathActive('/admin') ? 'bg-white text-black font-bold border-r-4 border-[#5c5c5c]' : 'text-gray-600 hover:bg-gray-100'}`}>
+                        <Settings size={18} />
+                        <span className="text-sm">Admin Panel</span>
+                    </div>
+                )}
+
                 {/* Sales Head Navigation */}
                 {user.role === 'SH' && (
                     <>
-                        <div className="px-6 pt-4 pb-1 text-[10px] font-bold text-gray-400 uppercase">Sales Head</div>
+                        <div onClick={() => navigate('/sales/dashboard')} className={`flex items-center gap-3 px-6 py-2 cursor-pointer ${isPathActive('/sales/dashboard') || isPathActive('/sales/all') ? 'bg-white text-black font-bold border-r-4 border-[#5c5c5c]' : 'text-gray-600 hover:bg-gray-100'}`}>
+                            <LayoutDashboard size={18} />
+                            <span className="text-sm">Dashboard</span>
+                        </div>
                         <div onClick={() => navigate('/sales/action-required')} className={`flex items-center gap-3 px-6 py-2 cursor-pointer ${isPathActive('/sales/action-required') ? 'bg-white text-black font-bold border-r-4 border-[#5c5c5c]' : 'text-gray-600 hover:bg-gray-100'}`}>
                             <AlertCircle size={18} />
                             <span className="text-sm">Action Required</span>
@@ -156,6 +216,7 @@ export function Sidebar() {
                                 'Sales Heads': [] as typeof availableUsers,
                                 'Solution Architects': [] as typeof availableUsers,
                                 'Sales Persons': [] as typeof availableUsers,
+                                'Legal & Finance': [] as typeof availableUsers,
                                 'Others': [] as typeof availableUsers
                             };
 
@@ -166,6 +227,7 @@ export function Sidebar() {
                                 else if (roles.includes('SH') || roles.includes('SALES_HEAD') || roles.includes('SALES_LEAD')) grouped['Sales Heads'].push(u);
                                 else if (roles.includes('SA') || roles.includes('SOLUTION_ARCHITECT')) grouped['Solution Architects'].push(u);
                                 else if (roles.includes('SP') || roles.includes('SALES_PERSON') || roles.includes('SALES_REPRESENTATIVE')) grouped['Sales Persons'].push(u);
+                                else if (roles.includes('LEGAL') || roles.includes('LL') || roles.includes('FINANCE') || roles.includes('FIN')) grouped['Legal & Finance'].push(u);
                                 else grouped['Others'].push(u);
                             });
 
@@ -195,8 +257,43 @@ export function Sidebar() {
                 </div>
             </div>
 
+            {/* Data Freshness & Sync */}
+            <div className="p-4 bg-white border-t border-[#e1e1e1] flex flex-col gap-2 shrink-0">
+                <div className="flex flex-col gap-0.5">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Data Freshness</span>
+                    <span className="text-xs text-gray-600 truncate" title={syncStatus?.last_sync_at ? new Date(syncStatus.last_sync_at).toLocaleString() : 'Loading...'}>
+                        {syncStatus?.last_sync_at
+                            ? new Date(syncStatus.last_sync_at).toLocaleString()
+                            : 'Checking status...'}
+                    </span>
+                </div>
+                {['GH', 'PSH'].includes(user.role) && (
+                    <button
+                        onClick={handleSyncNow}
+                        disabled={isSyncing}
+                        className={`w-full py-1.5 px-3 rounded text-[11px] font-bold text-white transition-colors flex items-center justify-center gap-1 mt-1 ${isSyncing ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#5c5c5c] hover:bg-black'}`}
+                    >
+                        <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
+                        {isSyncing ? 'Syncing...' : 'Sync Now'}
+                    </button>
+                )}
+            </div>
+            {/* Log Out Button */}
+            <div className="px-4 py-2 bg-white border-t border-[#e1e1e1] shrink-0">
+                <button
+                    onClick={() => {
+                        logout();
+                        navigate('/');
+                    }}
+                    className="w-full py-2 px-3 rounded text-[11px] font-bold text-gray-700 hover:bg-gray-100 border border-gray-200 transition-colors flex items-center justify-center gap-2"
+                >
+                    <LogOut size={14} />
+                    Log Out
+                </button>
+            </div>
+
             {/* Current User Profile */}
-            <div className="p-4 border-t border-[#e1e1e1] flex items-center gap-3 bg-white">
+            <div className="p-4 border-t border-[#e1e1e1] flex items-center gap-3 bg-white shrink-0">
                 <div className="w-8 h-8 rounded bg-gray-200 flex items-center justify-center">
                     <User size={18} className="text-gray-500" />
                 </div>

@@ -5,11 +5,11 @@ from datetime import datetime
 
 # Connection details
 DB_CONFIG = {
-    "dbname": "bqs",
-    "user": "postgres",
-    "password": "Abcd1234",
-    "host": "127.0.0.1",
-    "port": 5432
+    "dbname": os.getenv("POSTGRES_DB", "bqs"),
+    "user": os.getenv("POSTGRES_USER", "postgres"),
+    "password": os.getenv("POSTGRES_PASSWORD"),
+    "host": os.getenv("POSTGRES_HOST", "127.0.0.1"),
+    "port": int(os.getenv("POSTGRES_PORT", "5432"))
 }
 
 def restore_all_data():

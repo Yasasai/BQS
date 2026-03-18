@@ -10,6 +10,8 @@ import { OpportunitiesTable, FilterState } from '../components/OpportunitiesTabl
 import { Pagination } from '../components/Pagination';
 import { ApprovalModal } from '../components/ApprovalModal';
 import { MultiSelect } from '../components/MultiSelect';
+import apiClient from '../utils/apiClient';
+import { API_ENDPOINTS } from '../constants/apiEndpoints';
 
 type TabType = 'all' | 'action-required' | 'in-progress' | 'review' | 'completed';
 
@@ -50,31 +52,29 @@ export function SalesHeadDashboard() {
     const [isActionsOpen, setIsActionsOpen] = useState(false);
 
     useEffect(() => {
-        const endpoints = ['regions', 'practices', 'stages', 'statuses'];
-        endpoints.forEach(end => {
-            fetch(`http://localhost:8000/api/opportunities/metadata/${end}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (end === 'regions') setAllRegions(data);
-                    if (end === 'practices') setAllPractices(data);
-                    if (end === 'stages') setAllStages(data);
-                    if (end === 'statuses') setAllStatuses(data);
-                })
-                .catch(err => console.error(`Failed to fetch ${end}`, err));
-        });
+        const fetchMeta = async () => {
+             try {
+                const [regions, practices, stages, statuses] = await Promise.all([
+                    apiClient.get(API_ENDPOINTS.OPPORTUNITIES.METADATA.REGIONS),
+                    apiClient.get(API_ENDPOINTS.OPPORTUNITIES.METADATA.PRACTICES),
+                    apiClient.get(API_ENDPOINTS.OPPORTUNITIES.METADATA.STAGES),
+                    apiClient.get(API_ENDPOINTS.OPPORTUNITIES.METADATA.STATUSES)
+                ]);
+                setAllRegions(regions.data);
+                setAllPractices(practices.data);
+                setAllStages(stages.data);
+                setAllStatuses(statuses.data);
+            } catch (err) {
+                console.error("❌ Failed to fetch metadata in SalesHeadDashboard", err);
+            }
+        };
+        fetchMeta();
     }, []);
 
     // Modal state
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [selectedOppId, setSelectedOppId] = useState<string[]>([]);
 
-    // Role-based Access Control
-    useEffect(() => {
-        if (user?.role !== 'SH' && user?.role !== 'GH') {
-            if (user?.role === 'PH') navigate('/practice-head/dashboard');
-            if (user?.role === 'SA' || user?.role === 'SP') navigate('/assigned-to-me');
-        }
-    }, [user, navigate]);
 
     // Sync URL with Tab
     useEffect(() => {
@@ -83,7 +83,7 @@ export function SalesHeadDashboard() {
         else if (path.includes('in-progress')) setSelectedTabs(['in-progress']);
         else if (path.includes('review')) setSelectedTabs(['review']);
         else if (path.includes('completed')) setSelectedTabs(['completed']);
-        else if (path.includes('all')) setSelectedTabs(['all']);
+        else if (path.includes('all') || path.includes('dashboard')) setSelectedTabs(['all']);
         else setSelectedTabs(['action-required']);
     }, [location.pathname]);
 
@@ -102,40 +102,41 @@ export function SalesHeadDashboard() {
         setSelectedOppId([]);
     }, [currentPage, pageSize, debouncedSearch, selectedTabs, user?.id, columnFilters]);
 
-    const fetchOpportunities = () => {
+    const fetchOpportunities = async () => {
         setLoading(true);
 
-        const params = new URLSearchParams({
-            page: currentPage.toString(),
-            limit: pageSize.toString(),
+        const params: any = {
+            page: currentPage,
+            limit: pageSize,
             tab: selectedTabs.join(','),
             user_id: user?.id || '',
             role: user?.role || ''
-        });
-        if (debouncedSearch) params.append('search', debouncedSearch);
-        if (columnFilters.length > 0) params.append('filters', JSON.stringify(columnFilters));
+        };
+        if (debouncedSearch) params.search = debouncedSearch;
+        if (columnFilters.length > 0) params.filters = JSON.stringify(columnFilters);
 
-        fetch(`http://localhost:8000/api/opportunities/?${params}`)
-            .then(res => {
-                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-                return res.json();
-            })
-            .then(data => {
-                if (data.items) {
-                    setOpportunities(data.items);
-                    setTotalCount(data.total_count);
-                    setGlobalPipelineValue(data.total_value || 0);
-                    if (data.counts) setTabCounts(data.counts);
-                } else {
-                    setOpportunities(data);
-                    setTotalCount(data.length);
-                }
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error("❌ Failed to fetch opportunities:", err);
-                setLoading(false);
-            });
+        try {
+            const res = await apiClient.get(API_ENDPOINTS.OPPORTUNITIES.BASE, { params });
+            const data = res.data;
+            if (data && data.items && Array.isArray(data.items)) {
+                setOpportunities(data.items);
+                setTotalCount(data.total_count || 0);
+                setGlobalPipelineValue(data.total_value || 0);
+                if (data.counts) setTabCounts(data.counts);
+            } else if (Array.isArray(data)) {
+                setOpportunities(data);
+                setTotalCount(data.length);
+            } else {
+                console.warn("⚠️ Unexpected API response shape:", data);
+                setOpportunities([]);
+                setTotalCount(0);
+            }
+        } catch (err) {
+            console.error("❌ Failed to fetch opportunities in SalesHeadDashboard:", err);
+            setOpportunities([]);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const [assignTargetRole, setAssignTargetRole] = useState<'SP' | 'PH'>('SP');
@@ -143,18 +144,14 @@ export function SalesHeadDashboard() {
     const handleAssign = async (oppIds: string | string[], userId: string) => {
         const idsToAssign = Array.isArray(oppIds) ? oppIds : [oppIds];
         try {
-            await Promise.all(idsToAssign.map(id =>
-                fetch(`http://localhost:8000/api/opportunities/${id}/assign`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        role: assignTargetRole,
-                        user_id: userId,
-                        assigned_by: user?.id || 'SALES_HEAD'
-                    })
-                })
-            ));
-            fetchOpportunities();
+            await Promise.all(idsToAssign.map(id => {
+                return apiClient.post(API_ENDPOINTS.OPPORTUNITIES.ASSIGN(String(id)), {
+                    role: assignTargetRole,
+                    user_id: userId,
+                    assigned_by: user?.id || 'SALES_HEAD'
+                });
+            }));
+            await fetchOpportunities();
             setIsAssignModalOpen(false);
             setSelectedOppId([]);
         } catch (err) {
@@ -179,23 +176,19 @@ export function SalesHeadDashboard() {
         if (approvalIds.length === 0 || !approvalAction) return;
 
         try {
-            await Promise.all(approvalIds.map(id =>
-                fetch(`http://localhost:8000/api/opportunities/${id}/approve`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        role: 'SH',
-                        decision: approvalAction,
-                        user_id: user?.id,
-                        comment: comment
-                    })
-                })
-            ));
-            fetchOpportunities();
+            await Promise.all(approvalIds.map(id => {
+                return apiClient.post(API_ENDPOINTS.OPPORTUNITIES.APPROVE(String(id)), {
+                    role: 'SH',
+                    decision: approvalAction,
+                    user_id: user?.id,
+                    comment: comment
+                });
+            }));
+            await fetchOpportunities();
             setSelectedOppId([]);
             setIsApprovalModalOpen(false);
         } catch (error) {
-            console.error(error);
+            console.error("❌ Approval error:", error);
             alert("Action failed.");
         }
     };
@@ -267,7 +260,7 @@ export function SalesHeadDashboard() {
                         {(Object.keys(TAB_LABELS) as TabType[]).map(t => (
                             <button
                                 key={t}
-                                onClick={() => setSelectedTabs([t])}
+                                onClick={() => navigate(`/sales/${t}`)}
                                 className={`py-6 text-xs font-black uppercase tracking-[0.2em] relative transition-all ${selectedTabs.includes(t) ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 {TAB_LABELS[t]} ({tabCounts[t] || 0})

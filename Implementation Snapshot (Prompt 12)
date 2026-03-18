@@ -1,0 +1,38 @@
+# Opportunity Scoring App – Current Implementation Snapshot
+
+## Section 12 — Build Readiness Assessment
+
+### Overall Assessment: **Mid Build**
+
+#### Explanations and Evidence
+
+The Opportunity Scoring Application is currently categorized as a **Mid Build**. While it has moved far beyond the "Prototype Level" with complex database schemas and multi-persona support, it lacks the technical rigor and environmental cleanliness required for "Near Production" status.
+
+**Key Reasons for "Mid Build" Status:**
+
+1.  **Functional Maturity vs. Project Hygiene:**
+    *   The core business logic (Scoring, Assignment, Syncing) is largely implemented and functional.
+    *   However, the codebase is significantly cluttered with "debug_", "fix_", "check_", and "test_" scripts (over 100 such files in the root and backend directories). This indicates a highly iterative development phase where manual verification is still the primary method of testing.
+
+2.  **Architecture & Frameworks:**
+    *   The use of FastAPI (Backend) and Vite/React (Frontend) provides a modern and scalable foundation.
+    *   The routing system in the frontend is comprehensive, supporting distinct workflows for Global Head (GH), Practice Head (PH), Sales Head (SH), and Solution Architects (SA).
+
+3.  **Security and Production Safeguards:**
+    *   **Open CORS:** The backend currently uses `allow_origins=["*"]`, which is standard for development but must be restricted for production.
+    *   **Authentication:** Basic authentication and role-based access are implemented, but there is no evidence of robust session management, password hashing (visible in simple seed scripts), or secure token handling suitable for production.
+    *   **Hardcoded Configuration:** Many scripts and the core database logic contain hardcoded credentials or fallback to local development URLs.
+
+4.  **DevOps and Deployment:**
+    *   The project lacks a standard containerization setup (no `Dockerfile` or `docker-compose.yml` was found in the core structure).
+    *   Deployment and synchronization rely on a fragmented collection of `.bat` and manual `.py` scripts rather than a unified CI/CD pipeline or orchestration tool.
+
+5.  **Testing and Quality Assurance:**
+    *   There is no evidence of a formal automated testing suite (e.g., PyTest for backend or Vitest/Jest for frontend).
+    *   The presence of many "manual" verification scripts indicates that regression testing and quality assurance are not yet systemic.
+
+6.  **Data Integrity & Self-Healing:**
+    *   The system includes advanced "self-healing" database logic and complex synchronization managers for Oracle CRM integration. This reflects a level of maturity higher than an early build, as it handles real-world data complexity.
+
+---
+*Snapshot Date: February 27, 2026*

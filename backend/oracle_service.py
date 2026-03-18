@@ -14,16 +14,57 @@ env_path = os.path.join(base_dir, '.env')
 load_dotenv(dotenv_path=env_path)
 
 # Configuration
-ORACLE_BASE_URL = os.getenv("ORACLE_BASE_URL", "https://eijs-test.fa.em2.oraclecloud.com")
-ORACLE_TOKEN_URL = os.getenv("ORACLE_TOKEN_URL")
-ORACLE_CLIENT_ID = os.getenv("ORACLE_CLIENT_ID")
-ORACLE_CLIENT_SECRET = os.getenv("ORACLE_CLIENT_SECRET")
-# API Version switched to 'latest' as per successful direct fetch
-ORACLE_SCOPE = os.getenv("ORACLE_SCOPE", f"{ORACLE_BASE_URL}/crmRestApi/resources/latest/")
+def load_oracle_config():
+    """Loads Oracle configuration with priority: .env > oracle_api_config.txt > defaults"""
+    config = {
+        "ORACLE_BASE_URL": os.getenv("ORACLE_BASE_URL", "https://eijs-test.fa.em2.oraclecloud.com"),
+        "ORACLE_API_VERSION": os.getenv("ORACLE_API_VERSION", "latest"),
+        "ORACLE_USER": os.getenv("ORACLE_USER"),
+        "ORACLE_PASS": os.getenv("ORACLE_PASSWORD", os.getenv("ORACLE_PASS")),
+        "ORACLE_TOKEN_URL": os.getenv("ORACLE_TOKEN_URL"),
+        "ORACLE_CLIENT_ID": os.getenv("ORACLE_CLIENT_ID"),
+        "ORACLE_CLIENT_SECRET": os.getenv("ORACLE_CLIENT_SECRET"),
+    }
 
-# Fallback to Basic Auth
-ORACLE_USER = os.getenv("ORACLE_USER")
-ORACLE_PASS = os.getenv("ORACLE_PASSWORD", os.getenv("ORACLE_PASS"))
+    # Load from auto-discovered config file if it exists (at root)
+    config_file = os.path.join(os.path.dirname(base_dir), "oracle_api_config.txt")
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, "r") as f:
+                for line in f:
+                    if "=" in line and not line.startswith("#"):
+                        key, val = line.strip().split("=", 1)
+                        # Only use from file if not already set in .env
+                        if not os.getenv(key):
+                            config[key] = val
+            logger.info(f"✅ Loaded supplementary configuration from {config_file}")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not read oracle_api_config.txt: {e}")
+
+    # Standardize the Base URL - if it already contains the REST path, we need to be careful
+    if "/crmRestApi/resources/" in config["ORACLE_BASE_URL"]:
+        # Extract the true base and the version if possible
+        parts = config["ORACLE_BASE_URL"].split("/crmRestApi/resources/")
+        config["TRUE_BASE"] = parts[0]
+        config["AUTO_VERSION"] = parts[1].strip("/")
+    else:
+        config["TRUE_BASE"] = config["ORACLE_BASE_URL"].rstrip("/")
+        config["AUTO_VERSION"] = config["ORACLE_API_VERSION"]
+
+    return config
+
+_ORACLE_CONFIG = load_oracle_config()
+ORACLE_BASE_URL = _ORACLE_CONFIG["TRUE_BASE"]
+ORACLE_API_VERSION = _ORACLE_CONFIG["AUTO_VERSION"]
+ORACLE_TOKEN_URL = _ORACLE_CONFIG["ORACLE_TOKEN_URL"]
+ORACLE_CLIENT_ID = _ORACLE_CONFIG["ORACLE_CLIENT_ID"]
+ORACLE_CLIENT_SECRET = _ORACLE_CONFIG["ORACLE_CLIENT_SECRET"]
+ORACLE_USER = _ORACLE_CONFIG["ORACLE_USER"]
+ORACLE_PASS = _ORACLE_CONFIG["ORACLE_PASS"]
+
+# Construct derived values
+ORACLE_REST_ROOT = f"{ORACLE_BASE_URL}/crmRestApi/resources/{ORACLE_API_VERSION}"
+ORACLE_SCOPE = os.getenv("ORACLE_SCOPE", f"{ORACLE_REST_ROOT}/")
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -74,7 +115,7 @@ def get_oracle_token():
 def get_from_oracle(endpoint, params=None):
     """Generic Oracle API Caller with Bearer token and robust session"""
     token = get_oracle_token()
-    url = f"{ORACLE_BASE_URL}/crmRestApi/resources/latest/{endpoint}"
+    url = f"{ORACLE_REST_ROOT}/{endpoint}"
     
     headers = {"Content-Type": "application/json"}
     auth = None
@@ -224,8 +265,7 @@ def map_oracle_to_db(oracle_item):
         remote_id = str(get_val(["OptyNumber", "OptyId"]))
 
         # Construct Opportunity URL
-        static_url = f"{ORACLE_BASE_URL}/crmRestApi/resources/latest/opportunities/"
-        remote_url = f"{static_url}{remote_id}"
+        remote_url = f"{ORACLE_REST_ROOT}/opportunities/{remote_id}"
 
         # Primary Opportunity Model Fields
         primary_data = {

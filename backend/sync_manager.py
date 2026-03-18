@@ -19,12 +19,15 @@ ORACLE_USER = os.getenv("ORACLE_USER")
 ORACLE_PASSWORD = os.getenv("ORACLE_PASSWORD", os.getenv("ORACLE_PASS"))
 MAX_CONCURRENCY = 5  # Limit concurrent requests
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
-logger = logging.getLogger(__name__)
+from backend.app.core.logging_config import setup_logging, get_logger
 
-def log(msg): 
-    print(msg, flush=True)
+# Setup standardized logging
+setup_logging()
+logger = get_logger("sync_manager")
+
+def log(msg):
     logger.info(msg)
+
 
 from backend.app.core.database import SessionLocal, init_db
 from backend.app.models import Opportunity, Practice
@@ -79,12 +82,12 @@ def map_oracle_to_db(item, db: Session):
         return {
             "opp_id": opty_id,
             "opp_number": str(item.get("OptyNumber") or opty_id),
-            "opp_name": item.get("Name") or "Unknown Opportunity",
+            "opp_name": item.get("Name") or f"Opportunity {opty_id}",
             "customer_name": item.get("TargetPartyName") or "Unknown Account",
             "geo": item.get("GEO_c") or item.get("Geo_c") or item.get("Region_c"),
             "currency": item.get("CurrencyCode", "USD"),
             "deal_value": float(item.get("Revenue") or 0),
-            "stage": item.get("SalesStage"),
+            "stage": item.get("SalesStage") or "Qualification",
             "close_date": close_date,
             "crm_last_updated_at": crm_last_updated_at,
             "primary_practice_id": primary_practice_id,
@@ -92,7 +95,8 @@ def map_oracle_to_db(item, db: Session):
             "local_last_synced_at": datetime.now(timezone.utc)
         }
     except Exception as e:
-        log(f"⚠️ Mapping Error for {item.get('OptyId')}: {e}")
+        db.rollback()
+        log(f"⚠️ Mapping Error for {item.get('OptyId', 'Unknown')}: {e}")
         return None
 
 async def fetch_page(client: httpx.AsyncClient, offset: int, limit: int) -> List[dict]:
@@ -206,12 +210,12 @@ async def sync_opportunities_async():
                 tasks.append(fetch_page(client, offset, limit))
             
             # Execute in parallel
-            log(f"⚡ Launching {len(tasks)} parallel requests...")
+            logger.info(f"⚡ Launching {len(tasks)} parallel requests...")
             results = await asyncio.gather(*tasks)
             
             # Flatten results
             all_items = [item for page in results for item in page]
-            log(f"📥 Downloaded {len(all_items)} records. Saving to DB...")
+            logger.info(f"📥 Downloaded {len(all_items)} records. Saving to DB...")
             
             # Save to DB (Synchronous operation)
             count = save_batch_to_db(all_items)
@@ -248,7 +252,7 @@ async def sync_opportunities_async():
                 
                 offset += (limit * chunk_size)
 
-    log(f"🎉 Async Sync Complete! Total Processed: {total_processed}")
+        logger.info(f"🎉 Async Sync Complete! Total Processed: {total_processed}")
     return total_processed
 
 def sync_opportunities():

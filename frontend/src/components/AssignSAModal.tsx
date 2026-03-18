@@ -1,7 +1,5 @@
-
-import React, { useState } from 'react';
-import axios from 'axios';
-import { useUser } from '../context/UserContext';
+import apiClient from '../utils/apiClient';
+import { API_ENDPOINTS } from '../constants/apiEndpoints';
 
 export const AssignSAModal = ({ isOpen, onClose, opp }: { isOpen: boolean, onClose: () => void, opp: any }) => {
     const { availableUsers, currentUser } = useUser();
@@ -15,9 +13,16 @@ export const AssignSAModal = ({ isOpen, onClose, opp }: { isOpen: boolean, onClo
     const handleAssign = async () => {
         if (!selectedSA) return;
         try {
-            await axios.post(`http://localhost:8000/api/inbox/assign?opp_id=${opp.opp_id}&assigned_to_user_id=${selectedSA}&assigned_by_user_id=${currentUser?.user_id}`);
+            await apiClient.post(API_ENDPOINTS.INBOX.ASSIGN, null, {
+                params: {
+                    opp_id: opp.opp_id,
+                    assigned_to_user_id: selectedSA,
+                    assigned_by_user_id: currentUser?.user_id
+                }
+            });
             onClose();
         } catch (e) {
+            console.error("❌ Assignment Failed:", e);
             alert("Assignment Failed");
         }
     };

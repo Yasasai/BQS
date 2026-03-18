@@ -1,0 +1,41 @@
+# Opportunity Scoring App – Current Implementation Snapshot
+
+## Section 11 — Known Gaps
+
+This section identifies missing components, incomplete features, technical debt, and temporary code segments within the current Opportunity Scoring Application codebase.
+
+### 1. Missing Components & Database Constraints
+*   **Data Integrity Constraints**:
+    *   Missing `Enum` types or database-level check constraints for status columns such as `gh_approval_status`, `ph_approval_status`, `sh_approval_status`, and `workflow_status` (all are implemented as generic `String` types).
+    *   Many critical business columns in the `Opportunity` table are nullable (e.g., `geo`, `deal_value`, `stage`, `workflow_status`).
+*   **Centralized Configuration**:
+    *   Scoring criteria, weights, and verdict thresholds are split between frontend constants and hardcoded logic in components, lacking a unified backend source of truth.
+*   **Transaction Management**:
+    *   Inconsistent use of transactions across API routers; several update paths lack explicit rollback logic or atomic handling for complex multi-table updates.
+
+### 2. Incomplete Features
+*   **Filtering Stubs**:
+    *   The `account_owner` and `win_probability` filters in the `get_all_opportunities` endpoint are implemented as placeholders (`pass`) and functional logic is missing.
+*   **Metadata Synchronization**:
+    *   Several fields defined in frontend interfaces (e.g., `sector`, `expected_po_date`, `estimated_billing_date`, `rfp_date`) are missing from the backend `Opportunity` model and CRM sync logic.
+*   **Concurrency Controls**:
+    *   The frontend `Opportunity` interface includes `locked_by` and `locked_at` fields, but no backend implementation exists to prevent concurrent editing by multiple users.
+
+### 3. Technical Debt
+*   **Hardcoded Environment Details**:
+    *   Backend API URLs (e.g., `http://localhost:8000/api/...`) are hardcoded directly within frontend page components (e.g., `ScoreOpportunity.tsx`) instead of using environment-based configuration.
+*   **Architectural Bloat**:
+    *   Significant duplication of routing and filtering logic across multiple dashboard components (`ManagementDashboard`, `SalesHeadDashboard`, etc.) instead of a shared layout or custom hook.
+    *   Complex workflow state transitions and metrics calculations are performed directly within API routers instead of a dedicated service layer.
+*   **Static Scoring Rules**:
+    *   The scoring formula and verdict thresholds (e.g., `Strong Pursue >= 80`) are hardcoded in the frontend, making them difficult to adjust without code changes.
+*   **Type Safety Gaps**:
+    *   ID type mismatches between frontend (`number`) and backend (`string`) interfaces for `Opportunity` and `Assessment` objects.
+
+### 4. Temporary & Debug Code
+*   **Isolated Verification Tables**:
+    *   `OracleOpportunity` model is explicitly documented as an isolated table for connectivity verification and is not integrated into the production workflow.
+*   **Diagnostic Logic**:
+    *   "LOGIC FIX" comments and fallback checks (e.g., overriding status to `NOT_STARTED` if no section values exist) are present in the scoring router to handle inconsistent data states.
+*   **Sync Logic Inconsistency**:
+    *   Reference to a `minimal_opportunities` table exists within the batch sync router, while other parts of the sync system refer to `oracle_opportunities`.

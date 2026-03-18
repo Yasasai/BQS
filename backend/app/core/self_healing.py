@@ -24,6 +24,22 @@ def heal_database(engine):
             conn.commit()
             tables = inspect(engine).get_table_names() # Refresh
 
+    # 1.5. Heal the app_user table
+    if "app_user" in tables:
+        cols = [c['name'] for c in insp.get_columns("app_user")]
+        new_cols = {
+            "manager_email": "VARCHAR",
+            "corporate_title": "VARCHAR",
+            "geo_region": "VARCHAR",
+            "practice_name": "VARCHAR"
+        }
+        for col_name, col_type in new_cols.items():
+            if col_name not in cols:
+                logger.warning(f"Healing 'app_user': Adding missing '{col_name}' column.")
+                with engine.connect() as conn:
+                    conn.execute(text(f"ALTER TABLE app_user ADD COLUMN {col_name} {col_type};"))
+                    conn.commit()
+
     # 2. Heal the primary results table: opp_score_values
     if "opp_score_values" in tables:
         cols = [c['name'] for c in insp.get_columns("opp_score_values")]
@@ -79,6 +95,74 @@ def heal_database(engine):
             logger.warning("Healing 'opportunity': Adding missing 'workflow_status' column.")
             with engine.connect() as conn:
                 conn.execute(text("ALTER TABLE opportunity ADD COLUMN workflow_status VARCHAR;"))
+                conn.commit()
+
+        if "margin_percentage" not in cols:
+            logger.warning("Healing 'opportunity': Adding missing 'margin_percentage' column.")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE opportunity ADD COLUMN margin_percentage FLOAT;"))
+                conn.commit()
+
+        if "pat_margin" not in cols:
+            logger.warning("Healing 'opportunity': Adding missing 'pat_margin' column.")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE opportunity ADD COLUMN pat_margin FLOAT;"))
+                conn.commit()
+
+        if "bid_manager_user_id" not in cols:
+            logger.warning("Healing 'opportunity': Adding missing 'bid_manager_user_id' column.")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE opportunity ADD COLUMN bid_manager_user_id VARCHAR;"))
+                conn.commit()
+
+        if "finance_approval_status" not in cols:
+            logger.warning("Healing 'opportunity': Adding missing 'finance_approval_status' column.")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE opportunity ADD COLUMN finance_approval_status VARCHAR DEFAULT 'PENDING';"))
+                conn.commit()
+
+        if "legal_approval_status" not in cols:
+            logger.warning("Healing 'opportunity': Adding missing 'legal_approval_status' column.")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE opportunity ADD COLUMN legal_approval_status VARCHAR DEFAULT 'PENDING';"))
+                conn.commit()
+
+        if "assigned_finance_id" not in cols:
+            logger.warning("Healing 'opportunity': Adding missing 'assigned_finance_id' column.")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE opportunity ADD COLUMN assigned_finance_id VARCHAR;"))
+                conn.commit()
+
+        if "assigned_legal_id" not in cols:
+            logger.warning("Healing 'opportunity': Adding missing 'assigned_legal_id' column.")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE opportunity ADD COLUMN assigned_legal_id VARCHAR;"))
+                conn.commit()
+
+        if "assigned_practice_head_ids" not in cols:
+            logger.warning("Healing 'opportunity': Adding missing 'assigned_practice_head_ids' JSON column.")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE opportunity ADD COLUMN assigned_practice_head_ids JSON;"))
+                # Migration logic: if old column exists, migrate data
+                if "assigned_practice_head_id" in cols:
+                    conn.execute(text("""
+                        UPDATE opportunity 
+                        SET assigned_practice_head_ids = json_build_array(assigned_practice_head_id)
+                        WHERE assigned_practice_head_id IS NOT NULL;
+                    """))
+                conn.commit()
+
+        if "assigned_sa_ids" not in cols:
+            logger.warning("Healing 'opportunity': Adding missing 'assigned_sa_ids' JSON column.")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE opportunity ADD COLUMN assigned_sa_ids JSON;"))
+                # Migration logic: if old column exists, migrate data
+                if "assigned_sa_id" in cols:
+                    conn.execute(text("""
+                        UPDATE opportunity 
+                        SET assigned_sa_ids = json_build_array(assigned_sa_id)
+                        WHERE assigned_sa_id IS NOT NULL;
+                    """))
                 conn.commit()
         
         # Sync workflow_status from latest assessment versions

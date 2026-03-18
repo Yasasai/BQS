@@ -6,28 +6,21 @@ import json
 import sys
 from dotenv import load_dotenv
 
+from backend.app.services.oracle_service import ORACLE_USER, ORACLE_PASS, ORACLE_REST_ROOT
+
 # Force unbuffered output
 sys.stdout.reconfigure(line_buffering=True)
 
 print("--- DIAGNOSTIC SCRIPT STARTING ---")
 
-# Load env
-base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-env_path = os.path.join(base_dir, '.env')
-load_dotenv(dotenv_path=env_path)
+print(f"Target: {ORACLE_REST_ROOT}")
+print(f"User: {ORACLE_USER}")
 
-BASE_URL = os.getenv("ORACLE_BASE_URL", "https://eijs-test.fa.em2.oraclecloud.com")
-USER = os.getenv("ORACLE_USER")
-PASS = os.getenv("ORACLE_PASSWORD", os.getenv("ORACLE_PASS"))
-
-print(f"Target: {BASE_URL}")
-print(f"User: {USER}")
-
-if not USER or not PASS:
-    print("❌ CREDENTIALS MISSING IN .ENV")
+if not ORACLE_USER or not ORACLE_PASS:
+    print("❌ CREDENTIALS MISSING")
     sys.exit(1)
 
-url = f"{BASE_URL}/crmRestApi/resources/latest/opportunities/describe"
+url = f"{ORACLE_REST_ROOT}/opportunities/describe"
 
 try:
     print(f"Sending GET request to {url}...")

@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { TopBar } from '../components/TopBar';
 import { Award, TrendingUp, CheckCircle, AlertCircle, Eye, FileText, Calendar, User, Send, UserPlus } from 'lucide-react';
 import { Opportunity } from '../types';
+import apiClient from '../utils/apiClient';
+import { API_ENDPOINTS } from '../constants/apiEndpoints';
 
 interface SubmittedAssessment {
-    id: number;
-    opp_id: number;
+    id: string;
+    opp_id: string;
     opportunity_name: string;
     customer: string;
     practice: string;
@@ -27,7 +29,7 @@ export const PracticeHeadReview = () => {
 
     // Unassigned opportunities state
     const [unassignedOpportunities, setUnassignedOpportunities] = useState<Opportunity[]>([]);
-    const [selectedForAssignment, setSelectedForAssignment] = useState<number[]>([]);
+    const [selectedForAssignment, setSelectedForAssignment] = useState<string[]>([]);
     const [filterGeo, setFilterGeo] = useState('all');
     const [filterPractice, setFilterPractice] = useState('all');
     const [filterDealSize, setFilterDealSize] = useState('all');
@@ -35,7 +37,7 @@ export const PracticeHeadReview = () => {
 
     // Assigned/submitted assessments state
     const [assessments, setAssessments] = useState<SubmittedAssessment[]>([]);
-    const [selectedAssessments, setSelectedAssessments] = useState<number[]>([]);
+    const [selectedAssessments, setSelectedAssessments] = useState<string[]>([]);
     const [filterRecommendation, setFilterRecommendation] = useState<string>('all');
     const [filterConfidence, setFilterConfidence] = useState<string>('all');
 
@@ -51,61 +53,31 @@ export const PracticeHeadReview = () => {
 
     const fetchUnassignedOpportunities = async () => {
         try {
-            // TODO: API call
-            const mockData: Opportunity[] = [
-                {
-                    id: 201,
-                    remote_id: 'OPP-201',
-                    name: 'Cloud Migration - ACME Corp',
-                    customer: 'ACME Corporation',
-                    practice: 'Cloud',
-                    geo: 'North America',
-                    deal_value: 2500000,
-                    currency: 'USD',
-                    win_probability: 75,
-                    sales_owner: 'John Smith',
-                    stage: 'Qualification',
-                    close_date: '2026-06-30',
-                    last_synced_at: '2026-01-08T10:00:00'
-                },
-                {
-                    id: 202,
-                    remote_id: 'OPP-202',
-                    name: 'Cybersecurity Assessment - TechStart',
-                    customer: 'TechStart Inc',
-                    practice: 'Cybersecurity',
-                    geo: 'Europe',
-                    deal_value: 750000,
-                    currency: 'USD',
-                    win_probability: 60,
-                    sales_owner: 'Jane Doe',
-                    stage: 'Proposal',
-                    close_date: '2026-05-15',
-                    last_synced_at: '2026-01-07T14:30:00'
-                }
-            ];
-            setUnassignedOpportunities(mockData);
-            setLoading(false);
+            setLoading(true);
+            // Get unassigned opportunities for PH
+            const response = await apiClient.get(API_ENDPOINTS.OPPORTUNITIES.BASE, {
+                params: { tab: 'unassigned' }
+            });
+            setUnassignedOpportunities(response.data.items || []);
         } catch (error) {
-            console.error('Error fetching unassigned opportunities:', error);
+            console.error('❌ Error fetching unassigned opportunities:', error);
+        } finally {
             setLoading(false);
         }
     };
 
     const fetchSubmittedAssessments = async () => {
         try {
-            const response = await fetch('http://localhost:8000/api/opportunities');
-            const data = await response.json();
-
-            // Filter for opportunities awaiting PH approval
-            const awaitingReview = data.filter((opp: Opportunity) =>
-                opp.workflow_status === 'WAITING_PH_APPROVAL'
-            );
+            setLoading(true);
+            const response = await apiClient.get(API_ENDPOINTS.OPPORTUNITIES.BASE, {
+                params: { tab: 'review' }
+            });
+            const data = response.data.items || [];
 
             // Map to assessment format
-            const mapped: SubmittedAssessment[] = awaitingReview.map((opp: Opportunity) => ({
-                id: opp.id,
-                opp_id: opp.id,
+            const mapped: SubmittedAssessment[] = data.map((opp: Opportunity) => ({
+                id: String(opp.id),
+                opp_id: String(opp.id),
                 opportunity_name: opp.name,
                 customer: opp.customer,
                 practice: opp.practice || 'N/A',
@@ -114,61 +86,49 @@ export const PracticeHeadReview = () => {
                 assessed_by: opp.assigned_sa || 'Unknown SA',
                 submitted_at: opp.last_synced_at || new Date().toISOString(),
                 score: opp.win_probability || 0,
-                recommendation: opp.win_probability >= 80 ? 'Pursue' : opp.win_probability >= 60 ? 'Caution' : 'No-Bid',
-                confidence_level: opp.win_probability >= 75 ? 'High' : opp.win_probability >= 50 ? 'Medium' : 'Low'
+                recommendation: (opp.win_probability || 0) >= 80 ? 'Pursue' : (opp.win_probability || 0) >= 60 ? 'Caution' : 'No-Bid',
+                confidence_level: (opp.win_probability || 0) >= 75 ? 'High' : (opp.win_probability || 0) >= 50 ? 'Medium' : 'Low'
             }));
 
             setAssessments(mapped);
-            setLoading(false);
         } catch (error) {
-            console.error('Error fetching assessments:', error);
+            console.error('❌ Error fetching assessments:', error);
+        } finally {
             setLoading(false);
         }
     };
 
-    const handleAcceptScore = async (oppId: number) => {
+    const handleAcceptScore = async (oppId: string) => {
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${oppId}/accept-score`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    comments: 'Score accepted by Practice Head'
-                })
+            await apiClient.post(API_ENDPOINTS.OPPORTUNITIES.APPROVE(oppId), {
+                decision: 'APPROVE',
+                role: 'PH',
+                comments: 'Score accepted by Practice Head'
             });
 
-            if (response.ok) {
-                alert('✓ Score accepted and forwarded to Management');
-                fetchSubmittedAssessments(); // Refresh the list
-            } else {
-                alert('Failed to accept score. Please try again.');
-            }
+            alert('✓ Score accepted and forwarded to Management');
+            fetchSubmittedAssessments(); // Refresh the list
         } catch (error) {
-            console.error('Error accepting score:', error);
-            alert('Error accepting score. Please try again.');
+            console.error('❌ Error accepting score:', error);
+            alert('Failed to accept score. Please try again.');
         }
     };
 
-    const handleRejectScore = async (oppId: number, oppName: string) => {
+    const handleRejectScore = async (oppId: string, oppName: string) => {
         const reason = prompt(`Reject "${oppName}"?\n\nPlease provide a reason for rejection:`);
         if (!reason) return; // User cancelled
 
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${oppId}/reject-score`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    reason: reason
-                })
+            await apiClient.post(API_ENDPOINTS.OPPORTUNITIES.APPROVE(oppId), {
+                decision: 'REJECT',
+                role: 'PH',
+                comment: reason
             });
 
-            if (response.ok) {
-                alert('✓ Score rejected and returned to SA for rework');
-                fetchSubmittedAssessments(); // Refresh the list
-            } else {
-                alert('Failed to reject score. Please try again.');
-            }
+            alert('✓ Score rejected and returned to SA for rework');
+            fetchSubmittedAssessments(); // Refresh the list
         } catch (error) {
-            console.error('Error rejecting score:', error);
+            console.error('❌ Error rejecting score:', error);
             alert('Error rejecting score. Please try again.');
         }
     };

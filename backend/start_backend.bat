@@ -5,7 +5,12 @@ echo ============================================================
 echo.
 
 echo [1/3] Checking Python dependencies...
-python -m pip install -q -r requirements.txt
+if exist venv\Scripts\python.exe (
+    echo Using virtual environment...
+    venv\Scripts\python.exe -m pip install -q -r requirements.txt
+) else (
+    python -m pip install -q -r requirements.txt
+)
 if %errorlevel% neq 0 (
     echo ERROR: Failed to install dependencies
     pause
@@ -26,4 +31,8 @@ echo Sync status: GET http://localhost:8000/api/sync-status
 echo ============================================================
 echo.
 
-python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+if exist venv\Scripts\python.exe (
+    venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+) else (
+    python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+)

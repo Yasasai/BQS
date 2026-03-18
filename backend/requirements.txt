@@ -7,5 +7,12 @@ asyncpg
 requests
 pydantic
 pyright
-
 apscheduler
+pytest
+pytest-cov
+httpx
+pytest-asyncio
+python-jose[cryptography]
+passlib[bcrypt]
+alembic
+PyJWT

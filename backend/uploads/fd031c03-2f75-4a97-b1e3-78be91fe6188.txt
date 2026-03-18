@@ -1,0 +1,98 @@
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'app\routers\scoring.py'. Reloading...
+ INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-03-13 17:20:29,926 - INFO - [-] - main - 🛑 APScheduler shut down successfully.
+2026-03-13 17:20:29,926 - INFO - [-] - apscheduler.scheduler - Scheduler has been shut down
+INFO:     Application shutdown complete.
+INFO:     Finished server process [23640]
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=20244, pipe_handle=868)
+                                                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\AppData\Local\Programs\Python\Python314\Lib\multiprocessing\spawn.py", line 122, in spawn_main
+    exitcode = _main(fd, parent_sentinel)
+  File "C:\Users\YasasviUpadrasta\AppData\Local\Programs\Python\Python314\Lib\multiprocessing\spawn.py", line 131, in _main
+    prepare(preparation_data)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\AppData\Local\Programs\Python\Python314\Lib\multiprocessing\spawn.py", line 246, in prepare
+    _fixup_main_from_path(data['init_main_from_path'])
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\AppData\Local\Programs\Python\Python314\Lib\multiprocessing\spawn.py", line 297, in _fixup_main_from_path
+    main_content = runpy.run_path(main_path,
+                                  run_name="__mp_main__")
+  File "<frozen runpy>", line 287, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\main.py", line 24, in <module>
+    from backend.app.routers import auth, inbox, scoring, opportunities, users, upload, batch_sync
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\app\routers\__init__.py", line 1, in <module>
+    from . import auth, inbox, scoring, opportunities, users, batch_sync, upload 
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\app\routers\scoring.py", line 536
+    user_role_codes = [ur.role.role_code for ur in current_user.user_roles]      
+IndentationError: unexpected indent
+WARNING:  StatReload detected changes in 'app\routers\scoring.py'. Reloading...
+ Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=20244, pipe_handle=868)
+                                                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\AppData\Local\Programs\Python\Python314\Lib\multiprocessing\spawn.py", line 122, in spawn_main
+    exitcode = _main(fd, parent_sentinel)
+  File "C:\Users\YasasviUpadrasta\AppData\Local\Programs\Python\Python314\Lib\multiprocessing\spawn.py", line 131, in _main
+    prepare(preparation_data)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\AppData\Local\Programs\Python\Python314\Lib\multiprocessing\spawn.py", line 246, in prepare
+    _fixup_main_from_path(data['init_main_from_path'])
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\YasasviUpadrasta\AppData\Local\Programs\Python\Python314\Lib\multiprocessing\spawn.py", line 297, in _fixup_main_from_path
+    main_content = runpy.run_path(main_path,
+                                  run_name="__mp_main__")
+  File "<frozen runpy>", line 287, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\main.py", line 24, in <module>
+    from backend.app.routers import auth, inbox, scoring, opportunities, users, upload, batch_sync
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\app\routers\__init__.py", line 1, in <module>
+    from . import auth, inbox, scoring, opportunities, users, batch_sync, upload 
+  File "C:\Users\YasasviUpadrasta\Documents\Data Analytics\Internal Innovation\BQS\backend\app\routers\scoring.py", line 536
+    user_role_codes = [ur.role.role_code for ur in current_user.user_roles]      
+IndentationError: unexpected indent
+WARNING:  StatReload detected changes in 'app\routers\scoring.py'. Reloading...
+ 2026-03-13 17:20:48,636 - DEBUG - [-] - asyncio - Using selector: SelectSelector
+INFO:     Started server process [22924]
+INFO:     Waiting for application startup.
+2026-03-13 17:20:48,718 - INFO - [-] - main - 🚀 BQS Starting...
+2026-03-13 17:20:48,935 - INFO - [-] - backend.app.core.self_healing - Running Database Self-Healing...
+2026-03-13 17:20:49,087 - INFO - [-] - backend.app.core.self_healing - Syncing workflow_status from assessment data...
+2026-03-13 17:20:49,090 - INFO - [-] - backend.app.core.self_healing - Database Health Check: Passed.
+2026-03-13 17:20:49,192 - DEBUG - [-] - tzlocal - Looking up time zone info from registry
+2026-03-13 17:20:49,202 - INFO - [-] - apscheduler.scheduler - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-03-13 17:20:49,204 - INFO - [-] - apscheduler.scheduler - Added job "sync_opportunities_async" to job store "default"
+2026-03-13 17:20:49,204 - INFO - [-] - apscheduler.scheduler - Scheduler started 
+2026-03-13 17:20:49,204 - INFO - [-] - main - ✅ APScheduler initialized for background sync (every 1 hour)
+2026-03-13 17:20:49,205 - DEBUG - [-] - apscheduler.scheduler - Looking for jobs to run
+2026-03-13 17:20:49,205 - DEBUG - [-] - apscheduler.scheduler - Next wakeup is due at 2026-03-13 18:20:49.202660+05:30 (in 3599.997064 seconds)
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'app\routers\upload.py'. Reloading...
+ INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-03-13 17:21:10,085 - INFO - [-] - main - 🛑 APScheduler shut down successfully.
+2026-03-13 17:21:10,085 - INFO - [-] - apscheduler.scheduler - Scheduler has been shut down
+INFO:     Application shutdown complete.
+INFO:     Finished server process [22924]
+2026-03-13 17:21:12,179 - DEBUG - [-] - asyncio - Using selector: SelectSelector
+INFO:     Started server process [10708]
+INFO:     Waiting for application startup.
+2026-03-13 17:21:12,281 - INFO - [-] - main - 🚀 BQS Starting...
+2026-03-13 17:21:12,387 - INFO - [-] - backend.app.core.self_healing - Running Database Self-Healing...
+2026-03-13 17:21:12,527 - INFO - [-] - backend.app.core.self_healing - Syncing workflow_status from assessment data...
+2026-03-13 17:21:12,531 - INFO - [-] - backend.app.core.self_healing - Database Health Check: Passed.
+2026-03-13 17:21:12,694 - DEBUG - [-] - tzlocal - Looking up time zone info from registry
+2026-03-13 17:21:12,705 - INFO - [-] - apscheduler.scheduler - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-03-13 17:21:12,707 - INFO - [-] - apscheduler.scheduler - Added job "sync_opportunities_async" to job store "default"
+2026-03-13 17:21:12,708 - INFO - [-] - apscheduler.scheduler - Scheduler started 
+2026-03-13 17:21:12,708 - INFO - [-] - main - ✅ APScheduler initialized for background sync (every 1 hour)
+2026-03-13 17:21:12,708 - DEBUG - [-] - apscheduler.scheduler - Looking for jobs to run
+2026-03-13 17:21:12,709 - DEBUG - [-] - apscheduler.scheduler - Next wakeup is due at 2026-03-13 18:21:12.705669+05:30 (in 3599.996474 seconds)
+INFO:     Application startup complete.
+

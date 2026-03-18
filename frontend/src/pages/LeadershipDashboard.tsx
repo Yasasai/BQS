@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TopBar } from '../components/TopBar';
+import { useAuth } from '../context/AuthContext';
 import { Award, TrendingUp, CheckCircle, AlertCircle, Eye, FileText, Calendar, User } from 'lucide-react';
 
 interface SubmittedAssessment {
-    id: number;
-    opp_id: number;
+    id: string;
+    opp_id: string;
     opportunity_name: string;
     customer: string;
     practice: string;
@@ -14,12 +15,13 @@ interface SubmittedAssessment {
     assessed_by: string;
     submitted_at: string;
     weighted_score: number;
-    recommendation: 'Pursue' | 'Caution' | 'No-Bid';
-    confidence_level: 'High' | 'Medium' | 'Low';
+    recommendation: 'Pursue' | 'Caution' | 'No-Bid' | string;
+    confidence_level: 'High' | 'Medium' | 'Low' | string;
 }
 
 export const LeadershipDashboard = () => {
     const navigate = useNavigate();
+    const { authFetch } = useAuth();
     const [assessments, setAssessments] = useState<SubmittedAssessment[]>([]);
     const [loading, setLoading] = useState(true);
     const [filterRecommendation, setFilterRecommendation] = useState<string>('all');
@@ -32,71 +34,30 @@ export const LeadershipDashboard = () => {
 
     const fetchSubmittedAssessments = async () => {
         try {
-            // TODO: Replace with actual API call
-            // const response = await fetch('http://localhost:8000/api/assessments/submitted');
-            // const data = await response.json();
+            setLoading(true);
+            // Fetch opportunities with 'review' tab to get submitted assessments
+            const response = await authFetch('/api/opportunities/?tab=submitted&limit=100');
 
-            // Mock data for now
-            const mockData: SubmittedAssessment[] = [
-                {
-                    id: 1,
-                    opp_id: 101,
-                    opportunity_name: 'Cloud Migration - ACME Corp',
-                    customer: 'ACME Corporation',
-                    practice: 'Cloud',
-                    deal_value: 2500000,
-                    currency: 'USD',
-                    assessed_by: 'Rajesh Kumar',
-                    submitted_at: '2026-01-08T14:30:00',
-                    weighted_score: 85,
-                    recommendation: 'Pursue',
-                    confidence_level: 'High'
-                },
-                {
-                    id: 2,
-                    opp_id: 102,
-                    opportunity_name: 'Cybersecurity Assessment - TechStart',
-                    customer: 'TechStart Inc',
-                    practice: 'Cybersecurity',
-                    deal_value: 750000,
-                    currency: 'USD',
-                    assessed_by: 'Priya Sharma',
-                    submitted_at: '2026-01-07T11:15:00',
-                    weighted_score: 62,
-                    recommendation: 'Caution',
-                    confidence_level: 'Medium'
-                },
-                {
-                    id: 3,
-                    opp_id: 103,
-                    opportunity_name: 'ERP Implementation - GlobalTech',
-                    customer: 'GlobalTech Solutions',
-                    practice: 'ERP',
-                    deal_value: 4200000,
-                    currency: 'USD',
-                    assessed_by: 'Amit Patel',
-                    submitted_at: '2026-01-06T16:45:00',
-                    weighted_score: 92,
-                    recommendation: 'Pursue',
-                    confidence_level: 'High'
-                },
-                {
-                    id: 4,
-                    opp_id: 104,
-                    opportunity_name: 'Data Analytics Platform - RetailCo',
-                    customer: 'RetailCo',
-                    practice: 'Data & Analytics',
-                    deal_value: 1800000,
-                    currency: 'USD',
-                    assessed_by: 'Sneha Reddy',
-                    submitted_at: '2026-01-05T09:20:00',
-                    weighted_score: 45,
-                    recommendation: 'No-Bid',
-                    confidence_level: 'High'
-                }
-            ];
+            if (!response.ok) throw new Error("Failed to fetch");
 
-            setAssessments(mockData);
+            const data = await response.json();
+
+            const mappedData: SubmittedAssessment[] = data.items.map((item: any) => ({
+                id: item.id,
+                opp_id: item.id,
+                opportunity_name: item.name,
+                customer: item.customer,
+                practice: item.practice,
+                deal_value: item.deal_value,
+                currency: item.currency,
+                assessed_by: item.assigned_sa || item.assigned_sp || 'Unknown',
+                submitted_at: item.close_date || new Date().toISOString(),
+                weighted_score: item.win_probability || 0,
+                recommendation: item.recommendation || 'Caution',
+                confidence_level: item.confidence_level || 'Medium'
+            }));
+
+            setAssessments(mappedData);
             setLoading(false);
         } catch (error) {
             console.error('Error fetching assessments:', error);

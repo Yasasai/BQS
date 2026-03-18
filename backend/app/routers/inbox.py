@@ -1,12 +1,18 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, or_, and_
+from sqlalchemy import desc, or_, and_, cast, String
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
+
 from backend.app.core.database import get_db
-from backend.app.models import Opportunity, OpportunityAssignment, OppScoreVersion
+from backend.app.models import Opportunity, OpportunityAssignment, OppScoreVersion, AppUser
+from backend.app.core.logging_config import get_logger
+from backend.app.core.auth import get_current_user
+
+logger = get_logger("inbox_router")
+
 
 router = APIRouter(prefix="/api/inbox", tags=["inbox"])
 
@@ -20,29 +26,52 @@ class InboxItem(BaseModel):
     crm_last_updated_at: datetime
     latest_score_status: str = "NOT_STARTED"
     version_no: Optional[int] = None
+    overall_score: Optional[int] = None
 
 @router.get("/unassigned", response_model=List[InboxItem])
-def get_unassigned_opportunities(db: Session = Depends(get_db)):
+def get_unassigned_opportunities(db: Session = Depends(get_db), current_user: AppUser = Depends(get_current_user)):
     assigned_subquery = db.query(OpportunityAssignment.opp_id).filter(OpportunityAssignment.status == "ACTIVE")
-    opps = db.query(Opportunity).filter(Opportunity.is_active == True, ~Opportunity.opp_id.in_(assigned_subquery)).limit(1000).all()
+    
+    # Subquery for latest score
+    latest_score_subq = db.query(
+        OppScoreVersion.opp_id,
+        OppScoreVersion.overall_score,
+        OppScoreVersion.status,
+        OppScoreVersion.version_no
+    ).distinct(OppScoreVersion.opp_id).order_by(OppScoreVersion.opp_id, desc(OppScoreVersion.version_no)).subquery()
+
+    opps = db.query(Opportunity, latest_score_subq.c.overall_score, latest_score_subq.c.status, latest_score_subq.c.version_no) \
+        .outerjoin(latest_score_subq, Opportunity.opp_id == latest_score_subq.c.opp_id) \
+        .filter(Opportunity.is_active == True, ~Opportunity.opp_id.in_(assigned_subquery)).limit(1000).all()
+
     return [
         {
-            "opp_id": o.opp_id,
-            "row_id": o.opp_id,
-            "opp_number": o.opp_number,
-            "opp_name": o.opp_name,
-            "customer_name": o.customer_name,
-            "deal_value": o.deal_value or 0,
-            "crm_last_updated_at": o.crm_last_updated_at,
-            "latest_score_status": "NOT_STARTED"
+            "opp_id": o[0].opp_id,
+            "row_id": o[0].opp_id,
+            "opp_number": o[0].opp_number,
+            "opp_name": o[0].opp_name,
+            "customer_name": o[0].customer_name,
+            "deal_value": o[0].deal_value or 0,
+            "crm_last_updated_at": o[0].crm_last_updated_at,
+            "latest_score_status": o[2] or "NOT_STARTED",
+            "version_no": o[3],
+            "overall_score": o[1]
         }
         for o in opps
     ]
 
 @router.get("/my-assignments", response_model=List[InboxItem])
-def get_my_assignments(user_id: str, db: Session = Depends(get_db)):
+def get_my_assignments(db: Session = Depends(get_db), current_user: AppUser = Depends(get_current_user), user_id: Optional[str] = None):
+    user_id = user_id or current_user.user_id
     results = []
     
+    # Helper to get latest score for an opp
+    def get_opp_score_info(oid):
+        ls = db.query(OppScoreVersion).filter(OppScoreVersion.opp_id == oid).order_by(desc(OppScoreVersion.version_no)).first()
+        if ls:
+            return ls.overall_score, ls.status, ls.version_no
+        return None, "NOT_STARTED", None
+
     # 1. Fetch all versions created by this SA -> This includes history and drafts
     versions = db.query(OppScoreVersion).filter(
         OppScoreVersion.created_by_user_id == user_id
@@ -64,7 +93,8 @@ def get_my_assignments(user_id: str, db: Session = Depends(get_db)):
             "deal_value": o.deal_value or 0,
             "crm_last_updated_at": v.submitted_at or v.created_at,
             "latest_score_status": v.status,
-            "version_no": v.version_no
+            "version_no": v.version_no,
+            "overall_score": v.overall_score
         })
         
     # 2. Add currently assigned deals from OpportunityAssignment table
@@ -78,6 +108,7 @@ def get_my_assignments(user_id: str, db: Session = Depends(get_db)):
         if not o: continue
         if o.opp_id not in processed_opp_ids:
             processed_opp_ids.add(o.opp_id)
+            score, status, vno = get_opp_score_info(o.opp_id)
             results.append({
                 "opp_id": o.opp_id,
                 "row_id": o.opp_id,
@@ -86,14 +117,15 @@ def get_my_assignments(user_id: str, db: Session = Depends(get_db)):
                 "customer_name": o.customer_name,
                 "deal_value": o.deal_value or 0,
                 "crm_last_updated_at": o.crm_last_updated_at,
-                "latest_score_status": o.workflow_status or "NOT_STARTED",
-                "version_no": None
+                "latest_score_status": status,
+                "version_no": vno,
+                "overall_score": score
             })
             
     # 3. Add direct assignments from Opportunity table (Primary Source)
     direct_opps = db.query(Opportunity).filter(
         or_(
-            Opportunity.assigned_sa_id == user_id,
+            cast(Opportunity.assigned_sa_ids, String).like(f'%"{user_id}"%'),
             Opportunity.assigned_sp_id == user_id
         ),
         Opportunity.is_active == True
@@ -102,6 +134,7 @@ def get_my_assignments(user_id: str, db: Session = Depends(get_db)):
     for o in direct_opps:
         if o.opp_id not in processed_opp_ids:
             processed_opp_ids.add(o.opp_id)
+            score, status, vno = get_opp_score_info(o.opp_id)
             results.append({
                 "opp_id": o.opp_id,
                 "row_id": o.opp_id,
@@ -110,8 +143,9 @@ def get_my_assignments(user_id: str, db: Session = Depends(get_db)):
                 "customer_name": o.customer_name,
                 "deal_value": o.deal_value or 0,
                 "crm_last_updated_at": o.crm_last_updated_at,
-                "latest_score_status": o.workflow_status or "NOT_STARTED",
-                "version_no": None
+                "latest_score_status": status,
+                "version_no": vno,
+                "overall_score": score
             })
             
     return results
@@ -123,7 +157,7 @@ class AssignInput(BaseModel):
     assigned_by_user_id: Optional[str] = "SYSTEM"
 
 @router.post("/assign")
-def assign_opportunity(data: AssignInput, db: Session = Depends(get_db)):
+def assign_opportunity(data: AssignInput, db: Session = Depends(get_db), current_user: AppUser = Depends(get_current_user)):
     # 1. Resolve SA User
     # 1. Resolve SA User
     from backend.app.models import AppUser, Role, UserRole
@@ -131,7 +165,7 @@ def assign_opportunity(data: AssignInput, db: Session = Depends(get_db)):
     
     # SELF-HEALING: If user not found, create them to unblock demo
     if not sa_user:
-        print(f"⚠️ User {data.sa_email} not found. Auto-creating...")
+        logger.warning(f"⚠️ User {data.sa_email} not found. Auto-creating...")
         
         # Determine Name
         name = "Solution Architect"
@@ -164,7 +198,7 @@ def assign_opportunity(data: AssignInput, db: Session = Depends(get_db)):
     
     # 3. Create New Assignment
     # Resolve assigner
-    assigner_id = data.assigned_by_user_id
+    assigner_id = data.assigned_by_user_id or current_user.user_id
     
     # Map legacy frontend constants to seeded inputs if necessary
     if assigner_id == "PRACTICE_HEAD":
@@ -176,7 +210,7 @@ def assign_opportunity(data: AssignInput, db: Session = Depends(get_db)):
     
     if not assigner_user:
         # Fallback mechanism for safety, but log warning
-        print(f"⚠️ Warning: Assigner ID '{assigner_id}' not found. Defaulting to system/first user.")
+        logger.warning(f"⚠️ Warning: Assigner ID '{assigner_id}' not found. Defaulting to system/first user.")
         fallback = db.query(AppUser).first()
         assigner_id = fallback.user_id if fallback else "SYSTEM"
     
@@ -266,7 +300,7 @@ def assign_opportunity(data: AssignInput, db: Session = Depends(get_db)):
     }
 
 @router.get("/debug-assignments")
-def debug_assignments(db: Session = Depends(get_db)):
+def debug_assignments(db: Session = Depends(get_db), current_user: AppUser = Depends(get_current_user)):
     """Temporary endpoint to inspect assignments table"""
     assigns = db.query(OpportunityAssignment).all()
     results = []
@@ -281,7 +315,7 @@ def debug_assignments(db: Session = Depends(get_db)):
     return results
 
 @router.get("/{opp_id}")
-def get_opportunity_detail(opp_id: str, db: Session = Depends(get_db)):
+def get_opportunity_detail(opp_id: str, db: Session = Depends(get_db), current_user: AppUser = Depends(get_current_user)):
     o = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
     if not o: raise HTTPException(404, "Not found")
     return {

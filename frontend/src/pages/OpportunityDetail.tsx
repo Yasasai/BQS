@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Opportunity } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { TopBar } from '../components/TopBar';
-import { ChevronLeft, FileText, TrendingUp, History, File } from 'lucide-react';
+import { ChevronLeft, FileText, TrendingUp, History, File, Users } from 'lucide-react';
 
 type TabType = 'overview' | 'score' | 'versions' | 'documents';
 
@@ -21,14 +21,17 @@ interface AssessmentHistoryItem {
 export function OpportunityDetail() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, authFetch } = useAuth();
     const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<TabType>('overview');
 
     const isSA = user?.role === 'SA';
     const isSP = user?.role === 'SP';
-    const canSeeScore = isSA || isSP;
+    const isBM = user?.role === 'BM';
+    const isSL = user?.role === 'SL';
+    const canEditFinancials = isBM;
+    const canSeeScore = isSA || isSP || isBM || isSL;
 
     const [history, setHistory] = useState<AssessmentHistoryItem[]>([]);
 
@@ -41,10 +44,12 @@ export function OpportunityDetail() {
 
     const fetchOpportunityDetail = (oppId: string) => {
         setLoading(true);
-        fetch(`http://localhost:8000/api/opportunities/${oppId}`)
+        authFetch(`/api/opportunities/${oppId}`)
             .then(res => res.json())
             .then(data => {
                 setOpportunity(data);
+                setEditDealValue(data.deal_value);
+                setEditPatMargin(data.pat_margin || 0);
                 setLoading(false);
             })
             .catch(err => {
@@ -53,8 +58,39 @@ export function OpportunityDetail() {
             });
     };
 
+    const [editDealValue, setEditDealValue] = useState<number>(0);
+    const [editPatMargin, setEditPatMargin] = useState<number>(0);
+    const [isUpdatingFinancials, setIsUpdatingFinancials] = useState(false);
+
+    const handleUpdateFinancials = async () => {
+        if (!id) return;
+        setIsUpdatingFinancials(true);
+        try {
+            const res = await authFetch(`/api/opportunities/${id}/financials`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    deal_value: editDealValue,
+                    pat_margin: editPatMargin
+                })
+            });
+            if (res.ok) {
+                alert("Financials updated successfully");
+                fetchOpportunityDetail(id);
+            } else {
+                const err = await res.json();
+                alert(err.detail || "Update failed");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Update failed");
+        } finally {
+            setIsUpdatingFinancials(false);
+        }
+    };
+
     const fetchHistory = (oppId: string) => {
-        fetch(`http://localhost:8000/api/scoring/${oppId}/history`)
+        authFetch(`/api/scoring/${oppId}/history`)
             .then(res => res.json())
             .then(data => setHistory(data))
             .catch(err => console.error("Failed to fetch history", err));
@@ -310,21 +346,84 @@ export function OpportunityDetail() {
                                         <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                                             Deal Amount
                                         </label>
-                                        <p className="text-xl font-bold text-gray-900">
-                                            {new Intl.NumberFormat('en-US', {
-                                                style: 'currency',
-                                                currency: opportunity.currency || 'AED',
-                                                maximumFractionDigits: 0
-                                            }).format(opportunity.deal_value || 500000)}
-                                        </p>
+                                        {canEditFinancials ? (
+                                            <input 
+                                                type="number" 
+                                                value={editDealValue} 
+                                                onChange={(e) => setEditDealValue(parseFloat(e.target.value))}
+                                                className="w-full p-2 border border-gray-200 rounded text-lg font-bold text-gray-900"
+                                            />
+                                        ) : (
+                                            <p className="text-xl font-bold text-gray-900">
+                                                {new Intl.NumberFormat('en-US', {
+                                                    style: 'currency',
+                                                    currency: opportunity.currency || 'AED',
+                                                    maximumFractionDigits: 0
+                                                }).format(opportunity.deal_value || 500000)}
+                                            </p>
+                                        )}
                                     </div>
 
-                                    <div className="pt-4">
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                            PAT Margin (%)
+                                        </label>
+                                        {canEditFinancials ? (
+                                            <input 
+                                                type="number" 
+                                                step="0.1"
+                                                value={editPatMargin} 
+                                                onChange={(e) => setEditPatMargin(parseFloat(e.target.value))}
+                                                className="w-full p-2 border border-gray-200 rounded text-lg font-bold text-blue-700"
+                                            />
+                                        ) : (
+                                            <p className="text-xl font-bold text-blue-700">
+                                                {opportunity.pat_margin || 0}%
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {canEditFinancials && (
+                                        <button 
+                                            onClick={handleUpdateFinancials}
+                                            disabled={isUpdatingFinancials}
+                                            className="w-full py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 disabled:bg-gray-400"
+                                        >
+                                            {isUpdatingFinancials ? 'Updating...' : 'Update Financials'}
+                                        </button>
+                                    )}
+
+                                    <div className="pt-4 space-y-4">
                                         <div className="bg-gray-50 p-4 rounded-md border border-gray-100">
                                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2">Internal Status</label>
                                             <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-bold uppercase tracking-tighter">
                                                 {opportunity.status || 'NEW FROM CRM'}
                                             </span>
+                                        </div>
+
+                                        <div className="bg-blue-50/30 p-4 rounded-xl border border-blue-100/50">
+                                            <div className="flex items-center gap-2 mb-4">
+                                                <Users size={16} className="text-blue-600" />
+                                                <span className="text-[10px] font-bold text-gray-900 uppercase tracking-widest">Pursuit Team</span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-1">
+                                                    <span className="text-[9px] font-bold text-gray-400 uppercase">Practice Head</span>
+                                                    <p className="text-xs font-semibold text-gray-800">{opportunity.assigned_practice_head || 'Unassigned'}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <span className="text-[9px] font-bold text-gray-400 uppercase">Solution Architect</span>
+                                                    <p className="text-xs font-semibold text-gray-800">{opportunity.assigned_sa || 'Unassigned'}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <span className="text-[9px] font-bold text-gray-400 uppercase">Finance Lead</span>
+                                                    <p className="text-xs font-semibold text-gray-800 truncate">{opportunity.assigned_finance || 'Unassigned'}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <span className="text-[9px] font-bold text-gray-400 uppercase">Legal Lead</span>
+                                                    <p className="text-xs font-semibold text-gray-800 truncate">{opportunity.assigned_legal || 'Unassigned'}</p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

@@ -20,7 +20,7 @@ const TAB_LABELS: Record<string, string> = {
 
 export function SolutionArchitectDashboard() {
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, authFetch } = useAuth();
     const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
     const [loading, setLoading] = useState(true);
     const [totalCount, setTotalCount] = useState(0);
@@ -45,17 +45,18 @@ export function SolutionArchitectDashboard() {
     useEffect(() => {
         const endpoints = ['regions', 'practices', 'stages', 'statuses'];
         endpoints.forEach(end => {
-            fetch(`http://localhost:8000/api/opportunities/metadata/${end}`)
+            authFetch(`/api/opportunities/metadata/${end}`)
                 .then(res => res.json())
                 .then(data => {
-                    if (end === 'regions') setAllRegions(data);
-                    if (end === 'practices') setAllPractices(data);
-                    if (end === 'stages') setAllStages(data);
-                    if (end === 'statuses') setAllStatuses(data);
+                    const arr = Array.isArray(data) ? data : [];
+                    if (end === 'regions') setAllRegions(arr);
+                    if (end === 'practices') setAllPractices(arr);
+                    if (end === 'stages') setAllStages(arr);
+                    if (end === 'statuses') setAllStatuses(arr);
                 })
                 .catch(err => console.error(`Failed to fetch ${end}`, err));
         });
-    }, []);
+    }, [authFetch]);
 
 
 
@@ -65,7 +66,7 @@ export function SolutionArchitectDashboard() {
         if (path.includes('assigned')) setSelectedTabs(['needs-action']);
         else if (path.includes('start')) setSelectedTabs(['in-progress']);
         else if (path.includes('submitted')) setSelectedTabs(['submitted']);
-        else if (path.includes('all')) setSelectedTabs(['all']);
+        else if (path.includes('all') || path.includes('assigned-to-me')) setSelectedTabs(['all']);
         else setSelectedTabs(['needs-action']);
     }, [window.location.pathname]);
 
@@ -95,7 +96,7 @@ export function SolutionArchitectDashboard() {
         if (debouncedSearch) params.append('search', debouncedSearch);
         if (columnFilters.length > 0) params.append('filters', JSON.stringify(columnFilters));
 
-        fetch(`http://localhost:8000/api/opportunities/?${params}`)
+        authFetch(`/api/opportunities/?${params}`)
             .then(res => {
                 if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
                 return res.json();
@@ -127,7 +128,7 @@ export function SolutionArchitectDashboard() {
 
     const handleStartAssessment = async (oppId: string) => {
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${oppId}/start-assessment`, {
+            const response = await authFetch(`/api/opportunities/${oppId}/start-assessment`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sa_name: user?.name })
@@ -212,16 +213,24 @@ export function SolutionArchitectDashboard() {
                 <div className="bg-white rounded-3xl shadow-xl border border-gray-200 overflow-hidden flex flex-col flex-1">
                     {/* Tabs */}
                     <div className="flex items-center gap-8 px-8 border-b border-gray-100">
-                        {(Object.keys(TAB_LABELS) as TabType[]).map(t => (
-                            <button
-                                key={t}
-                                onClick={() => setSelectedTabs([t])}
-                                className={`py-6 text-xs font-black uppercase tracking-[0.2em] relative transition-all ${selectedTabs.includes(t) ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-                            >
-                                {TAB_LABELS[t]} ({tabCounts[t] || 0})
-                                {selectedTabs.includes(t) && <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-600 rounded-t-full shadow-[0_-2px_10px_rgba(37,99,235,0.3)]" />}
-                            </button>
-                        ))}
+                        {(Object.keys(TAB_LABELS) as TabType[]).map(t => {
+                            const routeMap: Record<string, string> = {
+                                'all': 'all',
+                                'needs-action': 'assigned',
+                                'in-progress': 'start',
+                                'submitted': 'submitted'
+                            };
+                            return (
+                                <button
+                                    key={t}
+                                    onClick={() => navigate(`/sa/${routeMap[t]}`)}
+                                    className={`py-6 text-xs font-black uppercase tracking-[0.2em] relative transition-all ${selectedTabs.includes(t) ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    {TAB_LABELS[t]} ({tabCounts[t] || 0})
+                                    {selectedTabs.includes(t) && <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-600 rounded-t-full shadow-[0_-2px_10px_rgba(37,99,235,0.3)]" />}
+                                </button>
+                            );
+                        })}
                     </div>
 
                     {/* Toolbar */}

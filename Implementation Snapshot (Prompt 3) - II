@@ -1,0 +1,31 @@
+# Opportunity Scoring App – Current Implementation Snapshot
+
+## Section 3 — Screens and Routes
+
+This section lists all UI routes currently implemented in the frontend application, along with their purpose and current status.
+
+### Route List
+
+| Route | Purpose | Status |
+| :--- | :--- | :--- |
+| `/` | **Home Redirect**: Logic to redirect users to their role-specific dashboard upon login. | Complete |
+| `/opportunity-inbox` | **Opportunity Inbox**: Legacy or alternate view for unassigned opportunities (Sales Lead) or assigned items. | Complete |
+| `/opportunity/:id` | **Opportunity Detail**: Comprehensive view of a single opportunity with tabs for Overview, Score, Versions, and Documents. | Complete |
+| `/score/:id` | **Scoring Interface**: The core interface for performing 9-factor assessments, submitting drafts, and handling the approval workflow (Approve/Reject). | Complete |
+| `/management/dashboard` | **Management Dashboard**: Entrance for GH/Leadership roles. | Complete |
+| `/management/*` | **Management Views**: Filtered views for all, action-required, unassigned, missing assignments, in-progress, review, and completed items. | Complete |
+| `/practice-head/dashboard` | **PH Dashboard**: Entrance for Practice Head roles. | Complete |
+| `/practice-head/*` | **PH Views**: Filtered views for items assigned to the PH, including action-required, in-progress, review, and completed. | Complete |
+| `/sales/dashboard` | **SH Dashboard**: Entrance for Sales Head roles. | Complete |
+| `/sales/*` | **SH Views**: Filtered views for items assigned to the SH, including action-required, in-progress, review, and completed. | Complete |
+| `/assigned-to-me` | **SA/SP Dashboard**: Entrance for Solution Architect and Salesperson roles. | Complete |
+| `/sa/*` | **SA/SP Views**: Filtered views for tasks assigned to the SA/SP, including new assignments, in-progress, and submitted items. | Complete |
+
+### Technical Notes
+
+*   **Dynamic Dashboards**: The `ManagementDashboard`, `PracticeHeadDashboard`, `SalesHeadDashboard`, and `SolutionArchitectDashboard` components use a unified `OpportunitiesTable` to display data, with role-based logic and tab-based filtering.
+*   **Workflow Integration**: Routing is tightly coupled with the `workflow_status` and `role` of the logged-in user, ensuring users only see relevant actions (e.g., GH/PH/SH see "Approve/Reject" while SA/SP see "Start/Continue Assessment").
+*   **Stubs/Unused Pages**:
+    *   `LeadershipDashboard.tsx`: Present in the codebase but NOT routed. Contains mock data. (Status: Stub)
+    *   `PracticeHeadReview.tsx`: Present in the codebase but NOT routed. Contains mock data and legacy logic. (Status: Stub)
+    *   `LeadershipDashboard.tsx`: Present in the codebase but NOT routed. (Status: Stub)

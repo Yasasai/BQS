@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { useUser } from '../context/UserContext';
 import { AssignSAModal } from '../components/AssignSAModal';
 import { useNavigate } from 'react-router-dom';
+
+import apiClient from '../utils/apiClient';
+import { API_ENDPOINTS } from '../constants/apiEndpoints';
 
 export const OpportunityInbox: React.FC = () => {
     const { currentUser } = useUser();
@@ -20,13 +22,14 @@ export const OpportunityInbox: React.FC = () => {
         setIsLoading(true);
         try {
             const isLead = currentUser.roles.includes("SALES_LEAD");
-            const endpoint = isLead ? "unassigned" : "my-assignments";
-            const url = `http://localhost:8000/api/inbox/${endpoint}${!isLead ? `?user_id=${currentUser.user_id}` : ''}`;
-
-            const res = await axios.get(url);
-            setOpps(res.data);
+            const endpoint = isLead ? API_ENDPOINTS.INBOX.UNASSIGNED : API_ENDPOINTS.INBOX.MY_ASSIGNMENTS;
+            
+            const response = await apiClient.get(endpoint, {
+                params: !isLead ? { user_id: currentUser.user_id } : {}
+            });
+            setOpps(response.data);
         } catch (e) {
-            console.error(e);
+            console.error("❌ Failed to fetch opportunities in Inbox:", e);
         } finally {
             setIsLoading(false);
         }
@@ -54,6 +57,7 @@ export const OpportunityInbox: React.FC = () => {
                         <tr>
                             <th className="p-4">Opportunity</th>
                             <th className="p-4">Customer</th>
+                            <th className="p-4">Score</th>
                             <th className="p-4">Values</th>
                             <th className="p-4">Stage</th>
                             <th className="p-4">Action</th>
@@ -67,6 +71,15 @@ export const OpportunityInbox: React.FC = () => {
                                     <div className="text-xs text-gray-500">{o.opp_number}</div>
                                 </td>
                                 <td className="p-4">{o.customer_name}</td>
+                                <td className="p-4">
+                                    <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                        o.overall_score >= 4 ? 'bg-green-100 text-green-800' : 
+                                        o.overall_score >= 3 ? 'bg-blue-100 text-blue-800' :
+                                        o.overall_score > 0 ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800'
+                                    }`}>
+                                        {o.overall_score || '-'}
+                                    </div>
+                                </td>
                                 <td className="p-4 text-sm">
                                     {o.deal_value?.toLocaleString()} {o.currency}
                                 </td>

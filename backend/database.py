@@ -8,7 +8,9 @@ import os
 import uuid
 
 # Database Configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Abcd1234@127.0.0.1:5432/bqs")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL must be set in the environment")
 
 Base = declarative_base()
 
@@ -137,7 +139,11 @@ class OppScoreSectionValue(Base):
 
 def init_db():
     try:
-        conn = psycopg2.connect(dbname='postgres', user='postgres', host='127.0.0.1', password='Abcd1234', port=5432)
+        db_user = os.getenv("POSTGRES_USER", "postgres")
+        db_password = os.getenv("POSTGRES_PASSWORD")
+        db_host = os.getenv("POSTGRES_HOST", "127.0.0.1")
+        db_port = os.getenv("POSTGRES_PORT", "5432")
+        conn = psycopg2.connect(dbname='postgres', user=db_user, host=db_host, password=db_password, port=db_port)
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         with conn.cursor() as cur:
             cur.execute("SELECT 1 FROM pg_catalog.pg_database WHERE datname = 'bqs'")
@@ -155,13 +161,19 @@ def init_db():
     Session = sessionmaker(bind=engine)
     db = Session()
     try:
-        # Roles
+        # Roles - Read from INITIAL_ROLES env var
         if not db.query(Role).first():
-            db.add_all([
-                Role(role_id=1, role_code="SALES_LEAD", role_name="Sales Lead"),
-                Role(role_id=2, role_code="SA", role_name="Solution Architect")
-            ])
-            db.flush()
+            roles_env = os.getenv("INITIAL_ROLES", "1:SALES_LEAD:Sales Lead,2:SA:Solution Architect")
+            roles_to_add = []
+            for item in roles_env.split(","):
+                try:
+                    rid, rcode, rname = item.split(":")
+                    roles_to_add.append(Role(role_id=int(rid), role_code=rcode, role_name=rname))
+                except ValueError:
+                    pass
+            if roles_to_add:
+                db.add_all(roles_to_add)
+                db.flush()
 
         # Users
         if not db.query(AppUser).filter_by(email="kunal.lead@example.com").first():

@@ -20,7 +20,7 @@ interface OpportunitiesTableProps {
     formatCurrency: (val: number) => string;
     selectedIds: string[];
     onSelectionChange: (ids: string[]) => void;
-    role?: 'GH' | 'PH' | 'SH' | 'SA' | 'SP';
+    role?: 'GH' | 'PH' | 'SH' | 'SA' | 'SP' | 'LEGAL' | 'FINANCE';
     filters?: FilterState[];
     onFilterChange?: (filters: FilterState[]) => void;
     metadata?: {
@@ -241,6 +241,7 @@ export const OpportunitiesTable: React.FC<OpportunitiesTableProps> = ({
         );
     };
 
+    console.log('DEBUG TABLE PROPS:', opportunities);
     return (
         <div className="bg-white border border-gray-200 rounded-sm overflow-x-auto mb-12" style={{ minHeight: '400px' }}>
             <table className="min-w-full border-collapse">

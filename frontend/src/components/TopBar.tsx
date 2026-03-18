@@ -9,6 +9,8 @@ const ROLES: { code: UserRole; label: string; name: string }[] = [
     { code: 'SH', label: 'Sales Head', name: 'Robert Chen' },
     { code: 'SA', label: 'Solution Architect', name: 'John Doe' },
     { code: 'SP', label: 'Sales Representative', name: 'Emily White' },
+    { code: 'BM', label: 'Bid Manager', name: 'Michael Brown' },
+    { code: 'SL', label: 'Sales Lead', name: 'Sarah Mitchell' },
 ];
 
 export function TopBar() {

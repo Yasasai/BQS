@@ -40,9 +40,9 @@ Base = declarative_base()
 # MODEL: Sync State (Tracks offset)
 # ============================================================================
 
-class SyncState(Base):
+class SyncMeta(Base):
     """Tracks the current sync offset for resumable sync"""
-    __tablename__ = "sync_state"
+    __tablename__ = "sync_offset_meta"
     
     id = Column(Integer, primary_key=True)
     sync_name = Column(String, unique=True, nullable=False)  # e.g., "oracle_opportunities"
@@ -56,13 +56,13 @@ class SyncState(Base):
 # MODEL: Minimal Opportunity (Just ID and Number)
 # ============================================================================
 
-class MinimalOpportunity(Base):
-    """Stores minimal opportunity data (ID and Number only)"""
-    __tablename__ = "minimal_opportunities"
+class OracleOpportunity(Base):
+    """Stores minimal opportunity data (ID and Number only) in staging table"""
+    __tablename__ = "oracle_opportunities_offset"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    opportunity_id = Column(String, unique=True, nullable=False)
-    opportunity_number = Column(String, nullable=True)
+    opty_id = Column(String, unique=True, nullable=False)
+    opty_number = Column(String, nullable=True)
     synced_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -84,11 +84,11 @@ def init_batch_sync_db():
 
 def get_offset_from_db(db: Session, sync_name: str = "oracle_opportunities") -> int:
     """Get current offset from database"""
-    state = db.query(SyncState).filter(SyncState.sync_name == sync_name).first()
+    state = db.query(SyncMeta).filter(SyncMeta.sync_name == sync_name).first()
     
     if not state:
         # First time - create new state
-        state = SyncState(
+        state = SyncMeta(
             sync_name=sync_name,
             current_offset=0,
             total_synced=0,
@@ -99,6 +99,7 @@ def get_offset_from_db(db: Session, sync_name: str = "oracle_opportunities") -> 
         logger.info(f"📝 Created new sync state for '{sync_name}'")
         return 0
     
+    logger.warning(f"Resetting sync tracking. Forcing new Oracle API call...")
     if state.is_complete:
         logger.info(f"✅ Sync '{sync_name}' already complete. Resetting to 0.")
         state.current_offset = 0
@@ -114,7 +115,7 @@ def update_offset_in_db(db: Session, offset: int, synced_count: int,
                         sync_name: str = "oracle_opportunities", 
                         is_complete: bool = False):
     """Update offset in database"""
-    state = db.query(SyncState).filter(SyncState.sync_name == sync_name).first()
+    state = db.query(SyncMeta).filter(SyncMeta.sync_name == sync_name).first()
     
     if state:
         state.current_offset = offset
@@ -169,11 +170,13 @@ def build_url(batch_size: int, offset: int) -> str:
 
 def call_api(url: str) -> dict:
     """Call Oracle API and return response"""
-    logger.info(f"📡 Calling API: {url[:100]}...")
+    logger.info(f"📡 Calling Oracle API (GET): {url[:150]}...")
     
+    logger.info(f"STAGE 3: Making HTTP GET to: {url} with params: None")
     with httpx.Client(auth=(ORACLE_USER, ORACLE_PASSWORD), timeout=60.0) as client:
         response = client.get(url)
         
+        logger.info(f"STAGE 4: Received HTTP {response.status_code} from Oracle.")
         if response.status_code != 200:
             logger.error(f"❌ API Error: {response.status_code} - {response.text[:200]}")
             raise Exception(f"API Error: {response.status_code}")
@@ -187,35 +190,35 @@ def call_api(url: str) -> dict:
 # SAVE TO DB
 # ============================================================================
 
-def save_to_db(db: Session, opportunity_id: str, opportunity_number: str):
+def save_to_db(db: Session, opty_id: str, opty_number: str):
     """Save opportunity ID and Number to database"""
     try:
         # Check if exists
-        result = db.query(MinimalOpportunity).filter(
-            MinimalOpportunity.opportunity_id == opportunity_id
+        result = db.query(OracleOpportunity).filter(
+            OracleOpportunity.opty_id == opty_id
         ).all()
         existing = result[0] if result else None
         
         if existing:
             # Update
-            existing.opportunity_number = opportunity_number
+            existing.opty_number = opty_number
             existing.synced_at = datetime.utcnow()
-            logger.info(f"   🔄 Updated: {opportunity_id} - {opportunity_number}")
+            logger.info(f"   🔄 Updated: {opty_id} - {opty_number}")
         else:
             # Insert
-            new_opp = MinimalOpportunity(
-                opportunity_id=opportunity_id,
-                opportunity_number=opportunity_number
+            new_opp = OracleOpportunity(
+                opty_id=opty_id,
+                opty_number=opty_number
             )
             db.add(new_opp)
-            logger.info(f"   ✅ Saved: {opportunity_id} - {opportunity_number}")
+            logger.info(f"   ✅ Saved: {opty_id} - {opty_number}")
         
         db.commit()
         return True
         
     except Exception as e:
         db.rollback()
-        logger.error(f"   ❌ Error saving {opportunity_id}: {e}")
+        logger.error(f"   ❌ Error saving {opty_id}: {e}")
         return False
 
 
@@ -223,27 +226,37 @@ def save_to_db(db: Session, opportunity_id: str, opportunity_number: str):
 # MAIN BATCH SYNC FUNCTION
 # ============================================================================
 
-def batch_sync_opportunities(batch_size: int = 5, sync_name: str = "oracle_opportunities"):
+def batch_sync_opportunities(batch_size: int = 5, sync_name: str = "oracle_opportunities", force_reset: bool = False):
     """
     Main batch sync function following the pseudocode
     
     Args:
         batch_size: Number of records to fetch per batch (default: 5)
         sync_name: Name of this sync job (for tracking)
+        force_reset: Whether to reset the offset to 0 before starting
     """
     logger.info("=" * 70)
     logger.info("🚀 Starting Batch Sync with Offset Tracking")
+    logger.info("STAGE 2: Entering Oracle API extractor function.")
     logger.info("=" * 70)
     
     # Initialize database
     SessionLocal = init_batch_sync_db()
-    db = SessionLocal()
+    
+    # Get offset from DB using a short-lived session
+    db_init = SessionLocal()
+    try:
+        if force_reset:
+            logger.warning(f"🔄 Forced sync requested. Resetting state for '{sync_name}'...")
+            reset_sync(sync_name)
+        
+        offset = get_offset_from_db(db_init, sync_name)
+    finally:
+        db_init.close()
+    
+    total_synced = 0
     
     try:
-        # Get offset from DB (returns 0 first time)
-        offset = get_offset_from_db(db, sync_name)
-        total_synced = 0
-        
         # Main sync loop
         while True:
             logger.info(f"\n{'='*70}")
@@ -253,49 +266,63 @@ def batch_sync_opportunities(batch_size: int = 5, sync_name: str = "oracle_oppor
             # Build URL
             url = build_url(batch_size, offset)
             
-            # Call API
+            # Explicit log after offset check (as requested)
+            logger.info(f"🚀 Offset retrieved: {offset}. Bypassing check and initiating Oracle API fetch via HTTP/GET...")
+            
+            # ── Per-batch clean session ──────────────────────────────────────
+            db = SessionLocal()
             try:
-                response = call_api(url)
-            except Exception as e:
-                logger.error(f"💥 API call failed: {e}")
-                break
-            
-            # Get items
-            items = response.get("items", [])
-            
-            if not items:
-                logger.info("✅ No more items found. Sync complete!")
-                update_offset_in_db(db, offset, total_synced, sync_name, is_complete=True)
-                break
-            
-            # Process each item
-            logger.info(f"📝 Processing {len(items)} items...")
-            batch_saved = 0
-            
-            for item in items:
-                opportunity_id = str(item.get("OptyId", ""))  # <--- Correct Oracle field name
-                opportunity_number = str(item.get("OptyNumber", ""))  # <--- Correct Oracle field name
+                # Call API
+                try:
+                    response = call_api(url)
+                except Exception as e:
+                    logger.error(f"💥 API call failed: {e}")
+                    break
                 
-                if opportunity_id:
-                    if save_to_db(db, opportunity_id, opportunity_number):
-                        batch_saved += 1
-            
-            total_synced += batch_saved
-            logger.info(f"✅ Batch complete: {batch_saved}/{len(items)} saved")
-            
-            # Update offset
-            offset = offset + batch_size
-            update_offset_in_db(db, offset, total_synced, sync_name, is_complete=False)
-            
-            # Check if more data exists
-            has_more = response.get("hasMore", False)
-            if not has_more:
-                logger.info("✅ No more data (hasMore=false). Sync complete!")
-                update_offset_in_db(db, offset, total_synced, sync_name, is_complete=True)
-                break
+                # Get items
+                items = response.get("items", [])
+                
+                if not items:
+                    logger.info("✅ No more items found. Sync complete!")
+                    update_offset_in_db(db, offset, total_synced, sync_name, is_complete=True)
+                    break
+                
+                # Process each item
+                logger.info(f"📝 Processing {len(items)} items...")
+                batch_saved = 0
+                
+                for item in items:
+                    opty_id = str(item.get("OptyId", ""))  # <--- Correct Oracle field name
+                    opty_number = str(item.get("OptyNumber", ""))  # <--- Correct Oracle field name
+                    
+                    if opty_id:
+                        if save_to_db(db, opty_id, opty_number):
+                            batch_saved += 1
+                
+                total_synced += batch_saved
+                logger.info(f"✅ Batch complete: {batch_saved}/{len(items)} saved")
+                
+                # Update offset
+                offset = offset + batch_size
+                update_offset_in_db(db, offset, total_synced, sync_name, is_complete=False)
+                
+                # Check if more data exists
+                has_more = response.get("hasMore", False)
+                if not has_more:
+                    logger.info("✅ No more data (hasMore=false). Sync complete!")
+                    update_offset_in_db(db, offset, total_synced, sync_name, is_complete=True)
+                    break
+            except Exception as _batch_err:
+                db.rollback()
+                logger.error(f"💥 Batch error (rolled back): {_batch_err}")
+                raise
+            finally:
+                db.close()
+            # ── end per-batch session ─────────────────────────────────────────
         
         logger.info("\n" + "=" * 70)
         logger.info(f"🎉 Sync Complete!")
+        logger.info(f"STAGE 5 SUCCESS: Extracted and passed records to database logic.")
         logger.info(f"   Total Synced: {total_synced}")
         logger.info(f"   Final Offset: {offset}")
         logger.info("=" * 70)
@@ -305,8 +332,6 @@ def batch_sync_opportunities(batch_size: int = 5, sync_name: str = "oracle_oppor
     except Exception as e:
         logger.error(f"💥 Sync Error: {e}")
         raise
-    finally:
-        db.close()
 
 
 # ============================================================================
@@ -319,7 +344,7 @@ def reset_sync(sync_name: str = "oracle_opportunities"):
     db = SessionLocal()
     
     try:
-        state = db.query(SyncState).filter(SyncState.sync_name == sync_name).first()
+        state = db.query(SyncMeta).filter(SyncMeta.sync_name == sync_name).first()
         if state:
             state.current_offset = 0
             state.total_synced = 0
@@ -339,7 +364,7 @@ def get_sync_status(sync_name: str = "oracle_opportunities"):
     db = SessionLocal()
     
     try:
-        state = db.query(SyncState).filter(SyncState.sync_name == sync_name).first()
+        state = db.query(SyncMeta).filter(SyncMeta.sync_name == sync_name).first()
         
         if not state:
             logger.info(f"ℹ️  No sync state found for '{sync_name}'")
@@ -371,8 +396,8 @@ def get_synced_count():
     db = SessionLocal()
     
     try:
-        count = db.query(MinimalOpportunity).count()
-        logger.info(f"📊 Total opportunities in minimal_opportunities table: {count}")
+        count = db.query(OracleOpportunity).count()
+        logger.info(f"📊 Total opportunities in oracle_opportunities table: {count}")
         return count
     finally:
         db.close()

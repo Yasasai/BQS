@@ -5,11 +5,14 @@ Batch Sync Router - Integrated into FastAPI Backend
 This router provides endpoints for batch sync with offset tracking.
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+import os
+import sys
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 from typing import Optional
-import sys
-import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -21,6 +24,8 @@ from batch_sync_with_offset import (
     reset_sync,
     get_synced_count
 )
+from backend.app.core.auth import get_current_user, require_role
+from backend.app.models import AppUser
 
 router = APIRouter(prefix="/api/batch-sync", tags=["Batch Sync"])
 
@@ -32,6 +37,7 @@ router = APIRouter(prefix="/api/batch-sync", tags=["Batch Sync"])
 class BatchSyncRequest(BaseModel):
     batch_size: int = 5
     sync_name: str = "oracle_opportunities"
+    force_reset: bool = False
 
 
 class SyncStatusResponse(BaseModel):
@@ -50,7 +56,8 @@ class SyncStatusResponse(BaseModel):
 @router.post("/start")
 async def start_batch_sync(
     request: BatchSyncRequest,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    current_user: AppUser = Depends(require_role(["GH"]))
 ):
     """
     Start batch sync with offset tracking
@@ -63,11 +70,15 @@ async def start_batch_sync(
         Status message
     """
     try:
+        logger.info("STAGE 1: Force Sync endpoint hit by user.")
+        
         # Run sync in background
+        logger.info("STAGE 1b: Dispatching sync task to background/service layer.")
         background_tasks.add_task(
             batch_sync_opportunities,
             batch_size=request.batch_size,
-            sync_name=request.sync_name
+            sync_name=request.sync_name,
+            force_reset=request.force_reset
         )
         
         return {
@@ -83,7 +94,8 @@ async def start_batch_sync(
 @router.post("/start-sync")
 async def start_batch_sync_sync(
     batch_size: int = 5,
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    current_user: AppUser = Depends(require_role(["GH"]))
 ):
     """
     Start batch sync (synchronous) - waits for completion
@@ -108,7 +120,7 @@ async def start_batch_sync_sync(
 
 
 @router.get("/status")
-async def get_batch_sync_status(sync_name: str = "oracle_opportunities"):
+async def get_batch_sync_status(sync_name: str = "oracle_opportunities", current_user: AppUser = Depends(get_current_user)):
     """
     Get current batch sync status
     
@@ -143,7 +155,7 @@ async def get_batch_sync_status(sync_name: str = "oracle_opportunities"):
 
 
 @router.post("/reset")
-async def reset_batch_sync(sync_name: str = "oracle_opportunities"):
+async def reset_batch_sync(sync_name: str = "oracle_opportunities", current_user: AppUser = Depends(require_role(["GH"]))):
     """
     Reset batch sync to start from beginning
     
@@ -179,7 +191,7 @@ async def get_batch_sync_count():
         return {
             "status": "success",
             "count": count,
-            "table": "minimal_opportunities"
+            "table": "oracle_opportunities"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

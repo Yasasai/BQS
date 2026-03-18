@@ -10,8 +10,10 @@ import { ApprovalModal } from '../components/ApprovalModal';
 import { AssignArchitectModal, AssignmentData } from '../components/AssignArchitectModal';
 import { MultiSelect } from '../components/MultiSelect';
 import { useAuth } from '../context/AuthContext';
+import apiClient from '../utils/apiClient';
+import { API_ENDPOINTS } from '../constants/apiEndpoints';
 
-type TabType = 'all' | 'action-required' | 'unassigned' | 'missing-ph' | 'missing-sh' | 'in-progress' | 'review' | 'completed';
+type TabType = 'all' | 'action-required' | 'unassigned' | 'missing-ph' | 'missing-sh' | 'fully-assigned' | 'partially-assigned' | 'in-progress' | 'review' | 'completed';
 
 const TAB_LABELS: Record<string, string> = {
     'all': 'All Opportunities',
@@ -19,6 +21,8 @@ const TAB_LABELS: Record<string, string> = {
     'unassigned': 'Fully Unassigned',
     'missing-ph': 'Missing PH',
     'missing-sh': 'Missing SH',
+    'fully-assigned': 'Fully Assigned',
+    'partially-assigned': 'Partially Assigned',
     'in-progress': 'In Progress',
     'review': 'Under Review',
     'completed': 'Completed'
@@ -52,25 +56,25 @@ export function ManagementDashboard() {
     const [isActionsOpen, setIsActionsOpen] = useState(false);
 
     useEffect(() => {
-        const endpoints = ['regions', 'practices', 'stages', 'statuses'];
-        endpoints.forEach(end => {
-            fetch(`http://localhost:8000/api/opportunities/metadata/${end}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (end === 'regions') setAllRegions(data);
-                    if (end === 'practices') setAllPractices(data);
-                    if (end === 'stages') setAllStages(data);
-                    if (end === 'statuses') setAllStatuses(data);
-                })
-                .catch(err => console.error(`Failed to fetch ${end}`, err));
-        });
+        const fetchMeta = async () => {
+             try {
+                const [regions, practices, stages, statuses] = await Promise.all([
+                    apiClient.get(API_ENDPOINTS.OPPORTUNITIES.METADATA.REGIONS),
+                    apiClient.get(API_ENDPOINTS.OPPORTUNITIES.METADATA.PRACTICES),
+                    apiClient.get(API_ENDPOINTS.OPPORTUNITIES.METADATA.STAGES),
+                    apiClient.get(API_ENDPOINTS.OPPORTUNITIES.METADATA.STATUSES)
+                ]);
+                setAllRegions(regions.data);
+                setAllPractices(practices.data);
+                setAllStages(stages.data);
+                setAllStatuses(statuses.data);
+            } catch (err) {
+                console.error("❌ Failed to fetch metadata in ManagementDashboard", err);
+            }
+        };
+        fetchMeta();
     }, []);
 
-    // Role-based Access Control
-    useEffect(() => {
-        if (user?.role === 'SA') navigate('/assigned-to-me');
-        else if (user?.role === 'PH') navigate('/practice-head/dashboard');
-    }, [user, navigate]);
 
     // Sync URL with Tab
     useEffect(() => {
@@ -93,34 +97,42 @@ export function ManagementDashboard() {
         if (user?.id) fetchOpportunities();
     }, [currentPage, pageSize, debouncedSearch, selectedTabs, columnFilters, user?.id]);
 
-    const fetchOpportunities = () => {
+    const fetchOpportunities = async () => {
         setLoading(true);
-        const params = new URLSearchParams({
-            page: currentPage.toString(),
-            limit: pageSize.toString(),
+        const params: any = {
+            page: currentPage,
+            limit: pageSize,
             tab: selectedTabs.join(','),
             user_id: user?.id || '',
             role: user?.role || ''
-        });
-        if (debouncedSearch) params.append('search', debouncedSearch);
-        if (columnFilters.length > 0) params.append('filters', JSON.stringify(columnFilters));
+        };
+        if (debouncedSearch) params.search = debouncedSearch;
+        if (columnFilters.length > 0) params.filters = JSON.stringify(columnFilters);
 
-        fetch(`http://localhost:8000/api/opportunities/?${params}`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.items && Array.isArray(data.items)) {
-                    setOpportunities(data.items);
-                    setTotalCount(data.total_count || 0);
-                    if (data.counts) setTabCounts(data.counts);
-                    if (data.total_value) setGlobalPipelineValue(data.total_value);
-                    if (data.last_synced_at) setLastSynced(data.last_synced_at);
-                }
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error("Failed to fetch opportunities", err);
-                setLoading(false);
-            });
+        try {
+            const res = await apiClient.get(API_ENDPOINTS.OPPORTUNITIES.BASE, { params });
+            const data = res.data;
+            console.log("DEBUG API RESPONSE:", data);
+            if (data && data.items && Array.isArray(data.items)) {
+                setOpportunities(data.items);
+                setTotalCount(data.total_count || 0);
+                if (data.counts) setTabCounts(data.counts);
+                if (data.total_value) setGlobalPipelineValue(data.total_value);
+                if (data.last_synced_at) setLastSynced(data.last_synced_at);
+            } else if (Array.isArray(data)) {
+                setOpportunities(data);
+                setTotalCount(data.length);
+            } else {
+                console.warn("⚠️ Unexpected API response shape:", data);
+                setOpportunities([]);
+                setTotalCount(0);
+            }
+        } catch (err) {
+            console.error("❌ Failed to fetch opportunities", err);
+            setOpportunities([]);
+        } finally {
+            setLoading(false);
+        }
     };
 
     // --- Assignment Modal Logic ---
@@ -140,17 +152,13 @@ export function ManagementDashboard() {
         if (idsToAssign.length === 0) return;
 
         try {
-            await Promise.all(idsToAssign.map(id =>
-                fetch(`http://localhost:8000/api/opportunities/${id}/assign`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        role: assignTargetRole,
-                        user_id: data.sa_owner, // Reuse sa_owner field for User ID
-                        assigned_by: user?.id || 'GH'
-                    })
-                })
-            ));
+            await Promise.all(idsToAssign.map(id => {
+                return apiClient.post(API_ENDPOINTS.OPPORTUNITIES.ASSIGN(String(id)), {
+                    assigned_sa: data.sa_owner,
+                    comments: 'Opportunity assigned by Management',
+                    assigned_by: user?.id || 'GH'
+                });
+            }));
             fetchOpportunities();
             setSelectedOppId([]);
             setIsAssignModalOpen(false);
@@ -176,18 +184,15 @@ export function ManagementDashboard() {
         if (approvalIds.length === 0 || !approvalAction) return;
 
         try {
-            await Promise.all(approvalIds.map(id =>
-                fetch(`http://localhost:8000/api/opportunities/${id}/approve`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        role: user?.role,
-                        decision: approvalAction,
-                        user_id: user?.id,
-                        comment: comment
-                    })
-                })
-            ));
+            await Promise.all(approvalIds.map(id => {
+                return apiClient.post(API_ENDPOINTS.OPPORTUNITIES.APPROVE(String(id)), {
+                    comments: 'Final decision approved',
+                    decision: approvalAction,
+                    user_id: user?.id,
+                    role: user?.role,
+                    comment: comment
+                });
+            }));
             fetchOpportunities();
             setSelectedOppId([]);
             setIsApprovalModalOpen(false);
@@ -244,7 +249,9 @@ export function ManagementDashboard() {
                                 label="View List"
                                 options={Object.entries(TAB_LABELS).map(([k, v]) => ({ label: v, value: k, count: tabCounts[k] }))}
                                 selected={selectedTabs}
-                                onChange={setSelectedTabs}
+                                onChange={(vals) => {
+                                    if (vals.length > 0) navigate(`/management/${vals[vals.length - 1]}`);
+                                }}
                                 placeholder="All Opportunities"
                             />
                         </div>

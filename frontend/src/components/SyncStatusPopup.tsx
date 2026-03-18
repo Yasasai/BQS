@@ -1,6 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { RefreshCcw, AlertCircle, CheckCircle, Clock, X, Terminal } from 'lucide-react';
+import apiClient from '../utils/apiClient';
+import { API_ENDPOINTS } from '../constants/apiEndpoints';
 
 interface SyncLog {
     id: number;
@@ -20,11 +21,10 @@ export const SyncStatusPopup: React.FC<{ isOpen: boolean; onClose: () => void }>
     const fetchLogs = async () => {
         setLoading(true);
         try {
-            const response = await fetch('http://localhost:8000/api/v1/sync-logs');
-            const data = await response.json();
-            setLogs(data);
+            const res = await apiClient.get(API_ENDPOINTS.SYNC.LOGS);
+            setLogs(res.data);
         } catch (error) {
-            console.error('Failed to fetch sync logs:', error);
+            console.error('❌ Failed to fetch sync logs in SyncStatusPopup:', error);
         } finally {
             setLoading(false);
         }
@@ -32,11 +32,12 @@ export const SyncStatusPopup: React.FC<{ isOpen: boolean; onClose: () => void }>
 
     const triggerSync = async () => {
         try {
-            await fetch('http://localhost:8000/api/v1/sync-crm', { method: 'POST' });
+            await apiClient.post(API_ENDPOINTS.SYNC.TRIGGER);
             alert('Sync triggered! Refresh logs in a few seconds.');
             fetchLogs();
         } catch (error) {
             alert('Failed to trigger sync');
+            console.error('❌ Sync Trigger Error:', error);
         }
     };
 
@@ -101,8 +102,8 @@ export const SyncStatusPopup: React.FC<{ isOpen: boolean; onClose: () => void }>
                             <div
                                 key={log.id}
                                 className={`p-4 rounded-xl border transition-all ${log.status === 'FAILED'
-                                        ? 'bg-red-500/5 border-red-500/20'
-                                        : 'bg-emerald-500/5 border-emerald-500/20'
+                                    ? 'bg-red-500/5 border-red-500/20'
+                                    : 'bg-emerald-500/5 border-emerald-500/20'
                                     }`}
                             >
                                 <div className="flex justify-between items-start mb-2">

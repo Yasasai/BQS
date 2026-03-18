@@ -1,0 +1,86 @@
+# 🏗️ Implementation Plan: Bid-Manager Centric Workflow (Refined)
+
+This plan outlines the refactor of the BQS application to position the **Bid Manager as the central orchestrator**, while ensuring a **unified user experience through a single routed interface**.
+
+---
+
+## ⚠️ User Review Required
+
+### 🔴 Workflow Change
+* The workflow is shifting from **Geo Head First → Bid Manager First**.
+* All new opportunities will land in the **Bid Manager’s inbox** for initial qualification.
+
+### ⚠️ Delegated Approval Model
+* Bid Manager can **approve on behalf of** Practice, Finance, and Legal.
+* **Condition**: Supporting proof (email / document) must be uploaded.
+> ✅ This introduces speed in execution while maintaining traceability via document-backed approvals.
+
+---
+
+## 🔧 Proposed Changes
+
+### 1. Database Schema (PostgreSQL)
+
+#### 🔄 Modify: `opportunity` Table
+* `workflow_status`: Include new state `BM_INITIAL`.
+* `bm_go_nogo_status`: ENUM (`PENDING`, `GO`, `NO_GO`).
+* `bm_scoring_data` (JSONB): Stores 9-point assessment criteria.
+* `dept_docs_path` (JSONB): Stores uploaded documents (Legal / Finance / Practice).
+* Delegated approval flags (`BOOLEAN`):
+    * `practice_approval_delegated`
+    * `legal_approval_delegated`
+    * `finance_approval_delegated`
+
+---
+
+### 2. Backend Logic (FastAPI)
+
+#### 🔄 Modify: `opportunities.py`
+* Update create/sync logic to set initial status to `BM_INITIAL`.
+* Add endpoint `POST /opportunities/{id}/bm-assessment` to handle the 9-point scoring and GO/NO-GO decision.
+
+#### 🆕 New Router: `bid_manager.py`
+* Handles:
+    * Document uploads per department.
+    * Delegated approvals.
+    * Validation of uploaded proof before triggering status transition.
+
+---
+
+### 3. Frontend UI (React / Vite)
+
+#### 🔄 Modify: `OpportunityInbox.tsx`
+* Bid Manager sees **“New Opportunities (BM_INITIAL)”** as the default view.
+* Update status badges and filters for the new stages.
+
+#### 🔄 Unified Page Approach (Single Route)
+* **❌ Remove**: `BidManagerGating.tsx` (no separate page needed).
+* **✅ Logic**: Reuse the existing **Opportunity Detail Page**. Dynamically render sections based on `user_role` and `workflow_status`.
+
+| Section | Visible To | Condition |
+| :--- | :--- | :--- |
+| **BM Scoring (9-point)** | Bid Manager | `workflow_status = BM_INITIAL` |
+| **Sales Assignment** | Sales Head | Post `BM_GO` |
+| **Practice Assignment** | Practice Head | Post `BM_GO` |
+| **Finance / Legal Approval** | Finance / Legal OR BM | Approval stage |
+
+> “A single-page, role-driven UI reduces navigation complexity and ensures all stakeholders operate on a unified view of the opportunity lifecycle.”
+
+---
+
+## ✅ 4. Verification Plan
+
+### 🔍 Automated Tests
+* **API Tests**: Validate only Bid Manager role can access `/bm-assessment`.
+* **Schema Validation**: Run `python check_db_columns.py`.
+
+### 🧪 Manual Testing walkthrough
+1. **Sync Opportunity**: Verify it appears in the **Bid Manager inbox**.
+2. **BM Assessment**: Fill 9-point scoring and select **GO**.
+3. **Document Upload**: Upload files for Legal / Finance.
+4. **Delegated Approval**: Enable delegated flag and submit with proof.
+5. **Final Approval**: Login as **Geo Head** and verify BM scoring, documents, and status.
+
+---
+
+> “This approach ensures faster deal qualification by front-loading decision-making with the Bid Manager, while maintaining governance through document-backed delegated approvals and a unified, role-driven interface.”

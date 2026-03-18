@@ -10,6 +10,8 @@ import { Pagination } from '../components/Pagination';
 import { ApprovalModal } from '../components/ApprovalModal';
 import { MultiSelect } from '../components/MultiSelect';
 import { useAuth } from '../context/AuthContext';
+import apiClient from '../utils/apiClient';
+import { API_ENDPOINTS } from '../constants/apiEndpoints';
 
 type TabType = 'all' | 'action-required' | 'in-progress' | 'review' | 'completed';
 
@@ -49,33 +51,29 @@ export function PracticeHeadDashboard() {
     const [isActionsOpen, setIsActionsOpen] = useState(false);
 
     useEffect(() => {
-        const endpoints = ['regions', 'practices', 'stages', 'statuses'];
-        endpoints.forEach(end => {
-            fetch(`http://localhost:8000/api/opportunities/metadata/${end}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (end === 'regions') setAllRegions(data);
-                    if (end === 'practices') setAllPractices(data);
-                    if (end === 'stages') setAllStages(data);
-                    if (end === 'statuses') setAllStatuses(data);
-                })
-                .catch(err => console.error(`Failed to fetch ${end}`, err));
-        });
+        const fetchMeta = async () => {
+             try {
+                const [regions, practices, stages, statuses] = await Promise.all([
+                    apiClient.get(API_ENDPOINTS.OPPORTUNITIES.METADATA.REGIONS),
+                    apiClient.get(API_ENDPOINTS.OPPORTUNITIES.METADATA.PRACTICES),
+                    apiClient.get(API_ENDPOINTS.OPPORTUNITIES.METADATA.STAGES),
+                    apiClient.get(API_ENDPOINTS.OPPORTUNITIES.METADATA.STATUSES)
+                ]);
+                setAllRegions(regions.data);
+                setAllPractices(practices.data);
+                setAllStages(stages.data);
+                setAllStatuses(statuses.data);
+            } catch (err) {
+                console.error("❌ Failed to fetch metadata in PracticeHeadDashboard", err);
+            }
+        };
+        fetchMeta();
     }, []);
 
     // Modal state
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [selectedOppId, setSelectedOppId] = useState<string[]>([]);
 
-    // Role-based Access Control
-    useEffect(() => {
-        if (user?.role === 'SA') {
-            navigate('/assigned-to-me');
-        } else if (user?.role === 'GH' || user?.role === 'SH') {
-            if (user?.role === 'SH') navigate('/sales/dashboard');
-            else navigate('/management/dashboard');
-        }
-    }, [user, navigate]);
 
     // Sync URL with Tab
     useEffect(() => {
@@ -102,61 +100,58 @@ export function PracticeHeadDashboard() {
         setSelectedOppId([]);
     }, [currentPage, pageSize, debouncedSearch, selectedTabs, columnFilters, user?.id]);
 
-    const fetchOpportunities = () => {
+    const fetchOpportunities = async () => {
         setLoading(true);
-        const params = new URLSearchParams({
-            page: currentPage.toString(),
-            limit: pageSize.toString(),
+        const params: any = {
+            page: currentPage,
+            limit: pageSize,
             tab: selectedTabs.join(','),
             user_id: user?.id || '',
             role: user?.role || ''
-        });
-        if (debouncedSearch) params.append('search', debouncedSearch);
-        if (columnFilters.length > 0) params.append('filters', JSON.stringify(columnFilters));
+        };
+        if (debouncedSearch) params.search = debouncedSearch;
+        if (columnFilters.length > 0) params.filters = JSON.stringify(columnFilters);
 
-        fetch(`http://localhost:8000/api/opportunities/?${params}`)
-            .then(res => {
-                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-                return res.json();
-            })
-            .then(data => {
-                if (data.items) {
-                    setOpportunities(data.items);
-                    setTotalCount(data.total_count || 0);
-                    if (data.counts) setTabCounts(data.counts);
-                    if (data.total_value) setGlobalPipelineValue(data.total_value);
-                } else {
-                    setOpportunities(data);
-                    setTotalCount(data.length);
-                }
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error("Failed to fetch opportunities", err);
-                setLoading(false);
-            });
+        try {
+            const res = await apiClient.get(API_ENDPOINTS.OPPORTUNITIES.BASE, { params });
+            const data = res.data;
+            if (data && data.items && Array.isArray(data.items)) {
+                setOpportunities(data.items);
+                setTotalCount(data.total_count || 0);
+                if (data.counts) setTabCounts(data.counts);
+                if (data.total_value) setGlobalPipelineValue(data.total_value);
+            } else if (Array.isArray(data)) {
+                setOpportunities(data);
+                setTotalCount(data.length);
+            } else {
+                console.warn("⚠️ Unexpected API response shape:", data);
+                setOpportunities([]);
+                setTotalCount(0);
+            }
+        } catch (err) {
+            console.error("❌ Failed to fetch opportunities in PracticeHeadDashboard:", err);
+            setOpportunities([]);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleAssignToSA = async (oppIds: string | string[], primarySA: string) => {
         const idsToAssign = Array.isArray(oppIds) ? oppIds : [oppIds];
         try {
-            await Promise.all(idsToAssign.map(id =>
-                fetch(`http://localhost:8000/api/opportunities/${id}/assign`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        role: 'SA',
-                        user_id: primarySA,
-                        assigned_by: user?.id || 'PRACTICE_HEAD'
-                    })
-                })
-            ));
+            await Promise.all(idsToAssign.map(id => {
+                return apiClient.post(API_ENDPOINTS.OPPORTUNITIES.ASSIGN(String(id)), {
+                    role: 'SA',
+                    user_id: primarySA,
+                    assigned_by: user?.id || 'PRACTICE_HEAD'
+                });
+            }));
 
-            fetchOpportunities();
+            await fetchOpportunities();
             setSelectedOppId([]);
             setIsAssignModalOpen(false);
         } catch (error) {
-            console.error('Error:', error);
+            console.error('❌ Assignment Error:', error);
             alert('Failed to assign SA');
         }
     };
@@ -176,23 +171,19 @@ export function PracticeHeadDashboard() {
         if (approvalIds.length === 0 || !approvalAction) return;
 
         try {
-            await Promise.all(approvalIds.map(id =>
-                fetch(`http://localhost:8000/api/opportunities/${id}/approve`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        role: 'PH',
-                        decision: approvalAction,
-                        user_id: user?.id,
-                        comment: comment
-                    })
-                })
-            ));
-            fetchOpportunities();
+            await Promise.all(approvalIds.map(id => {
+                return apiClient.post(API_ENDPOINTS.OPPORTUNITIES.APPROVE(String(id)), {
+                    role: 'PH',
+                    decision: approvalAction,
+                    user_id: user?.id,
+                    comment: comment
+                });
+            }));
+            await fetchOpportunities();
             setSelectedOppId([]);
             setIsApprovalModalOpen(false);
         } catch (error) {
-            console.error(error);
+            console.error("❌ Approval Error:", error);
             alert("Action failed.");
         }
     };
@@ -244,7 +235,9 @@ export function PracticeHeadDashboard() {
                                 label="View List"
                                 options={Object.entries(TAB_LABELS).map(([k, v]) => ({ label: v, value: k, count: tabCounts[k] }))}
                                 selected={selectedTabs}
-                                onChange={setSelectedTabs}
+                                onChange={(vals) => {
+                                    if (vals.length > 0) navigate(`/practice-head/${vals[vals.length - 1]}`);
+                                }}
                                 placeholder="All My Items"
                             />
                         </div>

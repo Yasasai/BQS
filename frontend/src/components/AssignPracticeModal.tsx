@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Opportunity } from '../types';
 import { X, ChevronRight } from 'lucide-react';
+import apiClient from '../utils/apiClient';
+import { API_ENDPOINTS } from '../constants/apiEndpoints';
 
 interface Props {
     opportunity: Opportunity;
@@ -22,18 +24,13 @@ export const AssignPracticeModal: React.FC<Props> = ({ opportunity, isOpen, onCl
         setIsSubmitting(true);
 
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${opportunity.id}/assign-practice`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ practice: selectedPractice }),
+            await apiClient.post(API_ENDPOINTS.OPPORTUNITIES.ASSIGN_PRACTICE(String(opportunity.id)), {
+                practice: selectedPractice
             });
-
-            if (response.ok) {
-                onSuccess();
-                onClose();
-            }
+            onSuccess();
+            onClose();
         } catch (err) {
-            console.error(err);
+            console.error("❌ Failed to assign practice in AssignPracticeModal:", err);
         } finally {
             setIsSubmitting(false);
         }
@@ -61,8 +58,8 @@ export const AssignPracticeModal: React.FC<Props> = ({ opportunity, isOpen, onCl
                                     key={p}
                                     onClick={() => setSelectedPractice(p)}
                                     className={`flex items-center justify-between px-4 py-3 rounded-lg border text-sm font-medium transition-all ${selectedPractice === p
-                                            ? 'border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-500/10'
-                                            : 'border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:bg-gray-50'
+                                        ? 'border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-500/10'
+                                        : 'border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:bg-gray-50'
                                         }`}
                                 >
                                     {p}
@@ -81,8 +78,8 @@ export const AssignPracticeModal: React.FC<Props> = ({ opportunity, isOpen, onCl
                         onClick={handleSubmit}
                         disabled={!selectedPractice || isSubmitting}
                         className={`flex-1 px-4 py-2.5 text-sm font-semibold text-white rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${!selectedPractice || isSubmitting
-                                ? 'bg-blue-300 cursor-not-allowed'
-                                : 'bg-blue-600 hover:bg-blue-700 hover:shadow-md'
+                            ? 'bg-blue-300 cursor-not-allowed'
+                            : 'bg-blue-600 hover:bg-blue-700 hover:shadow-md'
                             }`}
                     >
                         {isSubmitting ? 'Routing...' : 'Confirm Assignment'}

@@ -13,7 +13,7 @@ interface OpportunityRowProps {
     formatCurrency: (val: number) => string;
     selected: boolean;
     onSelect: (id: string, checked: boolean) => void;
-    role?: 'GH' | 'PH' | 'SH' | 'SA' | 'SP';
+    role?: 'GH' | 'PH' | 'SH' | 'SA' | 'SP' | 'LEGAL' | 'FINANCE';
 }
 
 export const OpportunityRow: React.FC<OpportunityRowProps> = ({
@@ -81,6 +81,8 @@ export const OpportunityRow: React.FC<OpportunityRowProps> = ({
                     <div className="flex flex-col gap-0.5 text-[9px] text-gray-500">
                         <div>PH: {opp.assigned_practice_head || '-'}</div>
                         <div>SH: {opp.assigned_sales_head || '-'}</div>
+                        <div>LG: {opp.assigned_legal || '-'}</div>
+                        <div>FN: {opp.assigned_finance || '-'}</div>
                     </div>
                 </td>
             )}
@@ -123,6 +125,12 @@ export const OpportunityRow: React.FC<OpportunityRowProps> = ({
                                 <ActionButtons onApprove={() => onApprove(opp.id)} onReject={() => onReject(opp.id)} />
                             )}
                             {role === 'SH' && opp.sh_approval_status === 'PENDING' && (
+                                <ActionButtons onApprove={() => onApprove(opp.id)} onReject={() => onReject(opp.id)} />
+                            )}
+                            {role === 'LEGAL' && opp.legal_approval_status === 'PENDING' && (
+                                <ActionButtons onApprove={() => onApprove(opp.id)} onReject={() => onReject(opp.id)} />
+                            )}
+                            {role === 'FINANCE' && opp.finance_approval_status === 'PENDING' && (
                                 <ActionButtons onApprove={() => onApprove(opp.id)} onReject={() => onReject(opp.id)} />
                             )}
                         </>

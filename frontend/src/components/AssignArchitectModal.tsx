@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Shield, Info } from 'lucide-react';
+import apiClient from '../utils/apiClient';
+import { API_ENDPOINTS } from '../constants/apiEndpoints';
 
 export interface AssignmentData {
     sa_owner: string;  // This will be the email/ID
@@ -40,13 +42,14 @@ export const AssignArchitectModal: React.FC<AssignArchitectModalProps> = ({
 
     // Fetch Users from database
     useEffect(() => {
-        if (isOpen) {
-            setLoading(true);
-            fetch(`http://localhost:8000/api/auth/users`)
-                .then(res => res.json())
-                .then((allUsers: any[]) => {
+        const fetchUsers = async () => {
+            if (isOpen) {
+                setLoading(true);
+                try {
+                    const res = await apiClient.get(API_ENDPOINTS.AUTH.USERS);
+                    const allUsers = res.data;
                     // Client-side filtering to handle role aliases
-                    const filtered = allUsers.filter(u => {
+                    const filtered = allUsers.filter((u: any) => {
                         const roles = u.roles || [];
                         if (targetRole === 'SH') return roles.includes('SH') || roles.includes('SALES_LEAD') || roles.includes('SALES_HEAD');
                         if (targetRole === 'PH') return roles.includes('PH') || roles.includes('PRACTICE_HEAD');
@@ -56,13 +59,14 @@ export const AssignArchitectModal: React.FC<AssignArchitectModalProps> = ({
                         return roles.includes(targetRole);
                     });
                     setAvailableUsers(filtered);
+                } catch (err) {
+                    console.error('❌ Failed to load users in AssignArchitectModal:', err);
+                } finally {
                     setLoading(false);
-                })
-                .catch(err => {
-                    console.error('Failed to load users:', err);
-                    setLoading(false);
-                });
-        }
+                }
+            }
+        };
+        fetchUsers();
     }, [isOpen, targetRole]);
 
     if (!isOpen) return null;

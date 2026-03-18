@@ -1,0 +1,81 @@
+# 🏗️ System Design: Opportunity Management System (BQS)
+
+## 1. Overview
+This document outlines the architecture and workflow for the **BQS Opportunity Management System**, a multi-role platform designed to transform CRM data into strategic intelligence.
+
+---
+
+## 2. Business Objective Layer
+
+The BQS platform is designed to transform "Gut-feeling" sales into "Data-driven" strategic decisions.
+
+*   **Strategic Alignment**: Ensure 100% of pursued deals match organizational goals.
+*   **Operational Excellence**: Reduce bid turnaround time by 30% through automated assignments.
+*   **Financial Integrity**: Mandate strict margin thresholds (PAT Margin) before sign-off.
+*   **Risk Mitigation**: Early detection of "Red Flags" via standardized scoring.
+
+---
+
+## 3. Role Mapping to Actual Org
+
+| System Role | Actual Organizational Title | Primary Responsibility |
+| :--- | :--- | :--- |
+| **Geo Head (GH)** | Executive Leadership / BU Head | Strategic P&L Oversight |
+| **Regional Head** | Territory Lead / Ops Manager | Regional Pipeline Velocity |
+| **Sales Head (SH)** | Vertical Sales Director | Sales Strategy & Team Direction |
+| **Practice Head (PH)** | Solutions Delivery Director | Capability & Resource Alignment|
+| **Solution Architect (SA)**| Technical Pre-sales / SME | Solution Design & Scoring |
+| **Legal/Finance** | Central Compliance Team | Risk & Margin Approval |
+
+---
+
+## 4. PostgreSQL Schema Design (Core Entities)
+
+### 4.1 Core Opportunity State
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `opp_id` | `String (PK)` | Oracle CRM Opportunity ID |
+| `workflow_status` | `String` | `NEW`, `GH_ASSIGNED`, `TECH_ASSESSMENT`, `SUBMITTED` |
+| `assigned_sales_head_id` | `String (FK)` | SH responsible for strategy |
+| `assigned_practice_head_ids`| `JSONB` | Multi-practice support |
+| `assigned_sa_ids` | `JSONB` | SAs assigned for technical scoring |
+| `pat_margin` | `Float` | Profit After Tax margin |
+
+---
+
+## 5. Workflow Diagram (Sequence)
+
+```mermaid
+graph TD
+    A[1. CRM Sync] --> B[2. Geo Head Assigns SH/PH]
+    B --> C[3. SH/PH Assigns SP/SA]
+    C --> D[4. Technical & Commercial Scoring]
+    D --> E[5. Compliance Review (Finance/Legal)]
+    E --> F[6. Final Management Approval]
+```
+
+---
+
+## 6. Frontend UX Layer
+
+*   **Adaptive Navigation**: Sidebar items change based on the user's active role.
+*   **Workflow Steppers**: Visual tracker for deal progress.
+*   **Actionable Inboxes**: Dedicated "Tasks assigned to me" on the home page.
+*   **Leadership Dashboard**: High-level metrics with drill-down capability.
+
+---
+
+## 7. Decision Intelligence Layer
+
+*   **Win-Rate Analytics**: Correlation between BQS scores and final outcomes.
+*   **Resource Bottlenecks**: Identifying overloaded practices or SAs.
+*   **Automated Flagging**: Alerts for deals with <15% margin or >4 risk level.
+*   **Regional Trends**: Benchmarking performance across different Geographies.
+
+---
+
+## 8. Implementation Notes
+
+1.  **Concurrency**: Implement record locking when an SA is actively scoring.
+2.  **Audit Logs**: Capture every assignment and status change with a timestamp.
+3.  **Real-time**: Use WebSockets for immediate inbox updates on status changes.

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Opportunity } from '../types';
 import { X, CheckCircle, XCircle, AlertCircle, FileText } from 'lucide-react';
+import apiClient from '../utils/apiClient';
+import { API_ENDPOINTS } from '../constants/apiEndpoints';
 
 interface Props {
     opportunity: Opportunity;
@@ -23,22 +25,15 @@ export const FinalDecisionModal: React.FC<Props> = ({ opportunity, isOpen, onClo
 
         setIsSubmitting(true);
         try {
-            const response = await fetch(`http://localhost:8000/api/opportunities/${opportunity.id}/final-decision`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    decision,
-                    comments,
-                    final_score: opportunity.win_probability
-                }),
+            await apiClient.post(API_ENDPOINTS.OPPORTUNITIES.FINAL_DECISION(String(opportunity.id)), {
+                decision,
+                comments,
+                final_score: opportunity.win_probability
             });
-
-            if (response.ok) {
-                onSuccess();
-                onClose();
-            }
+            onSuccess();
+            onClose();
         } catch (err) {
-            console.error(err);
+            console.error("❌ Failed to submit final decision in FinalDecisionModal:", err);
         } finally {
             setIsSubmitting(false);
         }

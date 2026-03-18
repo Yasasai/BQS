@@ -1,266 +1,312 @@
-
 import asyncio
 import os
 import sys
 import httpx
 import logging
+import uuid
+import traceback
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
-# Path setup to include backend modules
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-# sys.path.append(BASE_DIR) 
+# Path setup 
+# Ensuring backend package is discoverable
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-load_dotenv(os.path.join(BASE_DIR, '.env'))
-
-# Configuration
-ORACLE_BASE_URL = os.getenv("ORACLE_BASE_URL", "https://eijs-test.fa.em2.oraclecloud.com")
-ORACLE_USER = os.getenv("ORACLE_USER")
-ORACLE_PASSWORD = os.getenv("ORACLE_PASSWORD", os.getenv("ORACLE_PASS"))
-LIMIT = 50
-MAX_CONCURRENCY = 3 # Reduced to prevent overwhelmed DB
-
-# Imports
-from backend.app.core.database import SessionLocal, init_db
-from backend.app.models import Opportunity, Practice, SyncMeta
-
-
-# Set up file logging
-log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "async_sync.log")
-logging.basicConfig(
-    level=logging.INFO, 
-    format='%(asctime)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler(sys.stdout)
-    ]
+from backend.app.services.oracle_service import ORACLE_USER, ORACLE_PASS, ORACLE_BASE_URL
+from backend.app.core.database import SessionLocal
+from backend.app.models import (
+    CRMOpportunity, CRMOpportunityResource, CRMSyncRun, 
+    CRMSyncWatermark, CRMSyncError, CRMSalesRep
 )
-logger = logging.getLogger(__name__)
+from backend.app.core.logging_config import setup_logging, get_logger
 
-def log(msg):
-    logger.info(msg)
+# Set up standardized logging
+setup_logging()
+logger = get_logger("async_sync")
 
-# Semaphore for concurrency control
-sem = asyncio.Semaphore(MAX_CONCURRENCY)
+LIMIT = 50
 
-# EXPICIT FIELDS TO FETCH (Fixes Rank 3: Field Visibility)
-# Verified Fields from User Feedback/Docs
-# Note: User mentioned 'StatusCd' vs 'StatusCode' - standard is usually StatusCd or OptyStatusCd.
-# We will use 'StatusCd' if possible but fallback logic isn't possible in 'fields' param.
-# We will remove risky fields from the request list and rely on standard ones first.
-FETCH_FIELDS = [
-    "OptyId", "OptyNumber", "Name", "TargetPartyName", 
-    "Revenue", "CurrencyCode", "SalesStage", "EffectiveDate", 
-    "LastUpdateDate", "OptyLastUpdateDate", 
-    "Practice_c", "GEO_c" # Assuming these are custom, will check describe later
-]
-FIELDS_PARAM = ",".join(FETCH_FIELDS)
+# API Endpoints with specific versions as per Task
+OPPORTUNITY_API_URL = f"{ORACLE_BASE_URL}/crmRestApi/resources/11.12.1.0/opportunities"
+SALESREP_API_URL = f"{ORACLE_BASE_URL}/crmRestApi/resources/11.13.18.05/salesreps"
+# Opportunity Resource uses 'latest' as per Task
+# Base for resource is usually joined to the opportunity endpoint
+RESOURCE_API_VERSION = "latest"
 
-QUERY_FILTER = "StatusCode='OPEN'" # user indicated 'StatusCd' failed, 'StatusCode' is standard
+def parse_iso_date(date_str):
+    """Safely parse Oracle/ISO date strings."""
+    if not date_str: return None
+    try:
+        # Standard Oracle format: 2024-03-12T10:00:00.000+00:00
+        # and fallback for Z (UTC)
+        return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+    except Exception:
+        try:
+            # Simple date fallback: 2024-03-12
+            return datetime.strptime(date_str[:10], "%Y-%m-%d")
+        except Exception:
+            return None
 
-def map_oracle_to_db(item, session: Session):
+def map_opty_to_db(item):
     """
-    Map Oracle JSON item to DB dictionary.
-    Handles strict mapping and potential missing keys.
+    Map Oracle JSON response to CRMOpportunity model.
+    Task 1: Generate CRM Link and handle nullables.
     """
     try:
         opty_id = str(item.get("OptyId"))
-        if not opty_id: return None
+        if not opty_id or opty_id == "None":
+            return None
         
-        # Parse dates with robust fallback
-        last_update_str = item.get("LastUpdateDate") or item.get("OptyLastUpdateDate")
-        crm_last_updated_at = datetime.now(timezone.utc)
-        if last_update_str:
-            try:
-                if last_update_str.endswith('Z'):
-                    crm_last_updated_at = datetime.fromisoformat(last_update_str.replace('Z', '+00:00'))
-                else:
-                    crm_last_updated_at = datetime.fromisoformat(last_update_str)
-            except: pass
-            
-        close_date = None
-        eff_date = item.get("EffectiveDate")
-        if eff_date:
-            try:
-                close_date = datetime.strptime(eff_date[:10], "%Y-%m-%d")
-            except: pass
-
-        # Practice logic
-        practice_val = item.get("Practice_c")
-       
+        # CRM navigation link generation
+        crm_link = f"{ORACLE_BASE_URL}/crmUI/faces/FuseOverview?OpportunityId={opty_id}"
+        
         return {
-            "opp_id": opty_id,
-            "opp_number": str(item.get("OptyNumber") or opty_id),
-            "opp_name": item.get("Name") or "Unknown Opportunity",
-            "customer_name": item.get("TargetPartyName") or "Unknown Account",
-            "geo": item.get("GEO_c") or item.get("Geo_c") or item.get("Region_c"),
-            "currency": item.get("CurrencyCode", "USD"),
-            "deal_value": float(item.get("Revenue") or 0),
-            "stage": item.get("SalesStage"),
-            "close_date": close_date,
-            "crm_last_updated_at": crm_last_updated_at,
-            "local_last_synced_at": datetime.now(timezone.utc),
-            "practice_name_temp": practice_val, 
-            "is_active": True
+            "opty_id": opty_id,
+            "opty_number": item.get("OptyNumber"),
+            "opportunity_name": item.get("Name"),
+            "account_name": item.get("TargetPartyName"),
+            "revenue": float(item.get("Revenue")) if item.get("Revenue") is not None else None,
+            "currency_code": item.get("CurrencyCode"),
+            "sales_stage": item.get("SalesStage"),
+            "effective_date": parse_iso_date(item.get("EffectiveDate")),
+            "last_update_date": parse_iso_date(item.get("LastUpdateDate")),
+            "opty_last_update_date": parse_iso_date(item.get("OptyLastUpdateDate")),
+            "practice": item.get("Practice_c"),
+            "geo": item.get("GEO_c"),
+            "crm_link": crm_link,
+            "last_seen_ts": datetime.now(timezone.utc)
         }
     except Exception as e:
-        logger.error(f"Mapping Error for item {item.get('OptyId')}: {e}")
+        logger.error(f"Mapping Error for OptyId {item.get('OptyId')}: {e}")
         return None
 
-async def fetch_page(client, offset):
+async def log_sync_error(db, run_id, endpoint, error_msg):
     """
-    Fetch a single page of opportunities using explicit FIELDS and filter.
-    NO totalResults=true here (Rank 1 fix).
+    Task 6: Record failed API calls or database errors in crm_sync_error.
     """
-    async with sem:
-        params = {
-            "q": QUERY_FILTER,
-            "offset": offset,
-            "limit": LIMIT,
-            "fields": FIELDS_PARAM 
-        }
-        
-        url = f"{ORACLE_BASE_URL}/crmRestApi/resources/11.12.1.0/opportunities"
-        
-        try:
-            resp = await client.get(url, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-            return data.get("items", [])
-        except Exception as e:
-            log(f"Error fetching offset {offset}: {e}")
-            # Try debugging response
-            if hasattr(e, 'response'):
-                log(f"Response: {e.response.text}")
-            return []
-
-async def get_total_count(client):
-    """
-    Get total count using ONLY q and totalResults=true.
-    NO limit, NO fields (Rank 1 fix).
-    """
-    params = {
-        "q": QUERY_FILTER,
-        "totalResults": "true" 
-        # Intentionally omitting limit and fields to avoid conflicts
-    }
-    url = f"{ORACLE_BASE_URL}/crmRestApi/resources/11.12.1.0/opportunities"
-    
-    log(f"Getting total count with query: {QUERY_FILTER}")
     try:
-        resp = await client.get(url, params=params)
+        err = CRMSyncError(
+            run_id=run_id,
+            api_endpoint=endpoint,
+            error_message=str(error_msg),
+            stack_trace=traceback.format_exc(),
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(err)
+        db.commit()
+    except Exception as e:
+        logger.error(f"Failed to log sync error: {e}")
+
+async def fetch_resources(client, opty_id, run_id, db):
+    """
+    Task 2: Opportunity Resource Sync per Opportunity.
+    """
+    # Using 'latest' as per Task 3 Requirement (though mentioned in Task 2 context)
+    url = f"{ORACLE_BASE_URL}/crmRestApi/resources/{RESOURCE_API_VERSION}/opportunities/{opty_id}/child/OpportunityResource"
+    try:
+        resp = await client.get(url)
         resp.raise_for_status()
         data = resp.json()
-        return data.get("totalResults", 0)
-    except Exception as e:
-        log(f"Error fetching count: {e}")
-        if hasattr(e, 'response'):
-             log(f"Response: {e.response.text}")
-        return 0
-
-def bulk_upsert(items):
-    """
-    Synchronous bulk upsert function.
-    """
-    if not items: return 0
-    
-    db = SessionLocal()
-    saved_count = 0
-    
-    try:
-        # 1. Pre-process Practices
-        practice_names = set(i["practice_name_temp"] for i in items if i["practice_name_temp"])
+        items = data.get("items", [])
         
-        if practice_names:
-            existing_practices = db.query(Practice).filter(Practice.practice_name.in_(practice_names)).all()
-            practice_map = {p.practice_name: p.practice_id for p in existing_practices}
-            
-            for pname in practice_names:
-                if pname not in practice_map:
-                    import uuid
-                    new_p = Practice(
-                        practice_id=str(uuid.uuid4()),
-                        practice_code=pname.upper().replace(" ", "_")[:20],
-                        practice_name=pname
-                    )
-                    db.add(new_p)
-                    db.flush() 
-                    practice_map[pname] = new_p.practice_id
-        else:
-            practice_map = {}
-        
-        # 2. Process Opportunities
+        inserted_count = 0
         for item in items:
-            p_val = item.pop("practice_name_temp")
-            if p_val:
-                item["primary_practice_id"] = practice_map.get(p_val)
+            # Mapping per Task 2
+            mapped = {
+                "opty_id": opty_id,
+                "resource_name": item.get("PartyName"),
+                "salesrep_number": item.get("SalesrepNumber"),
+                "role_code": item.get("RoleCode"),
+                "email": item.get("EmailAddress"),
+                "last_seen_ts": datetime.now(timezone.utc),
+                "last_synced_run_id": run_id
+            }
             
-            existing = db.query(Opportunity).filter(Opportunity.opp_id == item["opp_id"]).first()
+            # Upsert Resource
+            # Using email and role_code as a composite identify for a person's role on an opty
+            existing = db.query(CRMOpportunityResource).filter(
+                CRMOpportunityResource.opty_id == opty_id,
+                CRMOpportunityResource.email == mapped["email"],
+                CRMOpportunityResource.role_code == mapped["role_code"]
+            ).first()
+            
             if existing:
-                for k, v in item.items():
+                for k, v in mapped.items():
                     setattr(existing, k, v)
             else:
-                db.add(Opportunity(**item))
-            
-            saved_count += 1
-            
-        db.commit()
-        log(f"Bulk saved {saved_count} records.")
+                db.add(CRMOpportunityResource(**mapped))
+            inserted_count += 1
         
+        return inserted_count
     except Exception as e:
-        log(f"Bulk Upsert Error: {e}")
-        db.rollback()
-    finally:
-        db.close()
+        logger.error(f"Error fetching resources for OptyId {opty_id}: {e}")
+        await log_sync_error(db, run_id, url, e)
+        return 0
+
+async def fetch_sales_reps(client, run_id, db):
+    """
+    Task 3: Sales Representative Sync.
+    """
+    params = {"q": "Status='A'", "fields": "PartyName,EmailAddress,SalesrepNumber"}
+    try:
+        resp = await client.get(SALESREP_API_URL, params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        items = data.get("items", [])
         
-    return saved_count
+        for item in items:
+            mapped = {
+                "salesrep_number": item.get("SalesrepNumber"),
+                "party_name": item.get("PartyName"),
+                "email_address": item.get("EmailAddress"),
+                "last_seen_ts": datetime.now(timezone.utc),
+                "last_synced_run_id": run_id
+            }
+            
+            existing = db.query(CRMSalesRep).filter(CRMSalesRep.salesrep_number == mapped["salesrep_number"]).first()
+            if existing:
+                for k, v in mapped.items():
+                    setattr(existing, k, v)
+            else:
+                db.add(CRMSalesRep(**mapped))
+        
+        db.commit()
+        logger.info(f"Sales Reps Processed: {len(items)}")
+        return len(items)
+    except Exception as e:
+        logger.error(f"Error fetching Sales Reps: {e}")
+        await log_sync_error(db, run_id, SALESREP_API_URL, e)
+        return 0
 
 async def run_async_sync():
     """
-    Main entry point for async sync.
+    Main orchestration logic.
     """
-    start_time = datetime.now(timezone.utc)
-    log("Starting Safe Async Sync (v2)...")
+    setup_logging()
+    db = SessionLocal()
+    run_id = str(uuid.uuid4())
     
-    total_processed = 0
+    # Task 4: Sync Run Tracking - Create record
+    sync_run = CRMSyncRun(
+        sync_run_id=run_id,
+        start_time=datetime.now(timezone.utc),
+        status="RUNNING",
+        total_records_processed=0
+    )
+    db.add(sync_run)
+    db.commit()
     
-    async with httpx.AsyncClient(auth=(ORACLE_USER, ORACLE_PASSWORD), timeout=60.0) as client:
-        # 2. Get Total Results (Strict query)
-        total = await get_total_count(client)
-        log(f"Total Records to Sync: {total}")
-        
-        if total == 0:
-            log("Nothing to sync or failed to get count.")
-            return
-
-        # 3. Process in Visual Batches
-        offsets = range(0, total, LIMIT)
-        TASK_CHUNK_SIZE = 5 # Small concurrency
-        
-        offset_list = list(offsets)
-        for i in range(0, len(offset_list), TASK_CHUNK_SIZE):
-            chunk_offsets = offset_list[i : i + TASK_CHUNK_SIZE]
-            log(f"Processing chunk {i//TASK_CHUNK_SIZE + 1} / {len(offset_list)//TASK_CHUNK_SIZE + 1} (Offsets {chunk_offsets[0]}-{chunk_offsets[-1]})")
+    logger.info(f"Sync Run Started: {run_id}")
+    
+    total_fetched = 0
+    total_upserted = 0
+    total_resources = 0
+    
+    try:
+        async with httpx.AsyncClient(auth=(ORACLE_USER, ORACLE_PASS), timeout=60.0) as client:
             
-            tasks = [fetch_page(client, o) for o in chunk_offsets]
-            pages = await asyncio.gather(*tasks)
+            # Task 3: Sales Rep Sync
+            await fetch_sales_reps(client, run_id, db)
             
-            chunk_items = [item for page in pages for item in page]
+            # Task 5: Watermark Tracking - Read offset
+            watermark = db.query(CRMSyncWatermark).filter(CRMSyncWatermark.object_name == 'opportunities').first()
+            if not watermark:
+                watermark = CRMSyncWatermark(object_name='opportunities', last_offset=0)
+                db.add(watermark)
+                db.commit()
             
-            if chunk_items:
-                mapped = []
-                for item in chunk_items:
-                    m = map_oracle_to_db(item, None)
-                    if m: mapped.append(m)
+            offset = watermark.last_offset
+            
+            # Task 8: Pagination Strategy
+            while True:
+                params = {
+                    "q": "StatusCode='OPEN'",
+                    "offset": offset,
+                    "limit": LIMIT,
+                    "fields": "OptyId,OptyNumber,Name,TargetPartyName,Revenue,CurrencyCode,SalesStage,EffectiveDate,LastUpdateDate,OptyLastUpdateDate,Practice_c,GEO_c",
+                    "totalResults": "false"
+                }
                 
-                if mapped:
-                    bulk_upsert(mapped)
-                    total_processed += len(mapped)
-
-    duration = (datetime.now(timezone.utc) - start_time).total_seconds()
-    log(f"Sync Finished in {duration:.2f}s. Total Processed: {total_processed}")
-    return {"status": "success", "total": total_processed, "duration": duration}
+                # Task 7: Logging API Request
+                logger.info(f"API Request: Offset={offset} Limit={LIMIT}")
+                
+                try:
+                    resp = await client.get(OPPORTUNITY_API_URL, params=params)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    items = data.get("items", [])
+                except Exception as e:
+                    logger.error(f"API Call Failed for offset {offset}: {e}")
+                    await log_sync_error(db, run_id, OPPORTUNITY_API_URL, e)
+                    # For non-fatal errors, we might break if api is down
+                    break
+                
+                if not items:
+                    # Task 7: Logging Records Received
+                    logger.info(f"Records Received: 0")
+                    break
+                
+                logger.info(f"Records Received: {len(items)}")
+                
+                batch_upsert_count = 0
+                batch_resource_count = 0
+                
+                for item in items:
+                    mapped = map_opty_to_db(item)
+                    if not mapped: continue
+                    
+                    mapped["last_synced_run_id"] = run_id
+                    
+                    # Task 1: Refactor Opportunity Sync Target
+                    existing = db.query(CRMOpportunity).filter(CRMOpportunity.opty_id == mapped["opty_id"]).first()
+                    if existing:
+                        for k, v in mapped.items():
+                            setattr(existing, k, v)
+                    else:
+                        db.add(CRMOpportunity(**mapped))
+                    
+                    batch_upsert_count += 1
+                    
+                    # Task 2: Opportunity Resource Sync
+                    res_count = await fetch_resources(client, mapped["opty_id"], run_id, db)
+                    batch_resource_count += res_count
+                
+                # Commit batch
+                db.commit()
+                
+                total_upserted += batch_upsert_count
+                total_resources += batch_resource_count
+                total_fetched += len(items)
+                
+                # Task 7: Logging
+                logger.info(f"Opportunity Upsert Count: {batch_upsert_count}")
+                logger.info(f"Opportunity Resource Records Inserted: {batch_resource_count}")
+                
+                # Task 5: Watermark Tracking - Update offset
+                offset += len(items)
+                watermark.last_offset = offset
+                watermark.last_successful_sync_time = datetime.now(timezone.utc)
+                db.commit()
+                
+                # Break if we got fewer records than requested (end of data)
+                if len(items) < LIMIT:
+                    break
+            
+            sync_run.status = "SUCCESS"
+            
+    except Exception as e:
+        logger.critical(f"Sync failed with fatal error: {e}")
+        sync_run.status = "FAILED"
+        sync_run.error_message = str(e)
+        await log_sync_error(db, run_id, "ORCHESTRATOR_MAIN", e)
+    finally:
+        # Task 4: Sync Run Tracking - End
+        sync_run.end_time = datetime.now(timezone.utc)
+        sync_run.total_records_processed = total_upserted
+        db.commit()
+        db.close()
+        logger.info(f"Sync Run Finished. Status: {sync_run.status}. Total Processed: {total_upserted}")
 
 if __name__ == "__main__":
     asyncio.run(run_async_sync())

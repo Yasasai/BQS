@@ -1,15 +1,102 @@
-
 from fastapi import APIRouter, Depends, HTTPException, Query
+import logging
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import func
 from backend.app.core.database import get_db
 from backend.app.models import OppScoreVersion, OppScoreSectionValue, OppScoreSection, Opportunity, AppUser
+from backend.app.services.opportunity_service import OpportunityService
+from backend.app.core.auth import get_current_user, require_role
 
 router = APIRouter(prefix="/api/scoring", tags=["scoring"])
+logger = logging.getLogger(__name__)
+
+REASON_OPTIONS = {
+    "STRAT": { # Strategic Fit
+        "critical": ["Extreme Misalignment", "Competitor Stronghold", "Legal/Regulatory Barrier"],
+        "low": ["Geography Mismatch", "Technology Stack Mismatch", "Low Priority Region"],
+        "average": ["Standard Offering", "Opportunistic Bid", "Minor Customization Needed"],
+        "high": ["Target Client Account", "Strong Portfolio Addition", "Key Growth Area"],
+        "exceptional": ["Board-Level Strategic Priority", "Market Entry Milestone", "CEO-Led Initiative"]
+    },
+    "WIN": { # Win Probability
+        "critical": ["Late Entry (Post-RFP)", "Known RFP Bias", "Blacklisted by Client"],
+        "low": ["Strong Incumbent", "No Capture History", "No Executive Access"],
+        "average": ["Competitive Field", "Standard RFP Process", "Average Win Rate"],
+        "high": ["Preferred Solution", "Niche Capability Leader", "Captured Early"],
+        "exceptional": ["Single Source / Wired", "Exclusive Proof of Concept", "Incumbent with 100% Satisfaction"]
+    },
+    "COMP": { # Competitive Position
+        "critical": ["No Product Fit", "Worst-in-Class Feature Set", "Unproven Technology"],
+        "low": ["Weak Positioning", "Generic Offering", "Low Brand Awareness"],
+        "average": ["Top 3 Contender", "Equal Footing", "Standard Differentiators"],
+        "high": ["Unique Value Prop", "Sole Source Potential", "Exclusive Partnership"],
+        "exceptional": ["Unrivaled Tech Superiority", "Monopoly Position", "Patent Protected Solution"]
+    },
+    "FIN": { # Financial Value
+        "critical": ["Negative Margin Deal", "Unfunded Project", "Unacceptable Terms"],
+        "low": ["Low Margins", "High Cost of Sales", "Payment Terms Issue"],
+        "average": ["Standard Margins", "Acceptable Budget", "Moderate CAPEX"],
+        "high": ["High Margins", "Recurring Revenue Model", "Budget Approved/Funded"],
+        "exceptional": ["Strategic Multi-Year Lock-in", "Massive TCV Upside", "Pre-Paid Contract"]
+    },
+    "FEAS": { # Delivery Feasibility
+        "critical": ["Total Skill Mismatch", "Severe Talent Shortage", "Zero Infrastructure"],
+        "low": ["Hiring Required", "Overbooked Experts", "Training Required"],
+        "average": ["Partial Availability", "Subcontractors Needed", "Standard Lead Times"],
+        "high": ["Team Bench Available", "Key Experts Ready", "Reusable Assets"],
+        "exceptional": ["Fully Automated Delivery", "Global Team on Standby", "Plug-and-Play Implementation"]
+    },
+    "CUST": { # Customer Relationship
+        "critical": ["Hostile Relationship", "Past Legal Dispute", "Direct Competitor Champion"],
+        "low": ["No Previous Contact", "Cold Relationship", "Blocked by Gatekeeper"],
+        "average": ["Transactional Contact", "New Stakeholders", "Neutral Reputation"],
+        "high": ["Trusted Advisor Status", "Executive Sponsorship", "Coach in Account"],
+        "exceptional": ["Partnership Alliance", "Shared Success Roadmap", "Co-Innovation Partner"]
+    },
+    "RISK": { # Risk Exposure
+        "critical": ["High Probability Catastrophic Risk", "Sovereign Default Risk", "Criminal Liability"],
+        "low": ["Undefined Scope", "Performance Penalties", "Complex Dependencies"],
+        "average": ["Manageable Commercial Risk", "Standard Penalties", "Stable Environment"],
+        "high": ["Well Defined Scope", "Stable Growth Area", "Low Dependencies"],
+        "exceptional": ["Risk Transfer to Partner", "Zero Liability Clauses", "Fully Guaranteed Success"]
+    },
+    "PROD": { # Product / Service Compliance
+        "critical": ["Major Regulatory Breach", "Security Red-Flag", "Zero Sovereignty"],
+        "low": ["Non-Compliance", "Certifications Missing", "Workaround Required"],
+        "average": ["Minor Deviation", "Waiver Potential", "Standard Data Handling"],
+        "high": ["Fully Compliant", "Exceeds Standards", "Security Certified"],
+        "exceptional": ["Gold Standard Industry Benchmark", "Pre-Approved by Regulator", "All Certs Active"]
+    },
+    "LEGAL": { # Legal & Commercial Readiness
+        "critical": ["Unlimited Liability", "No Termination Clause", "Loss of IP Control"],
+        "low": ["Unfavorable Terms", "Bonding Issues", "Non-Standard SLA"],
+        "average": ["Standard Terms", "Negotiable Clauses", "Acceptable Risk"],
+        "high": ["Favorable Terms", "Pre-negotiated MSA", "IP Retained"],
+        "exceptional": ["Standard Non-Negotiated MSA", "Zero IP Conflict", "Favorable Gov-Contract"]
+    }
+}
+
+@router.get("/config")
+def get_scoring_config(db: Session = Depends(get_db), current_user: AppUser = Depends(get_current_user)):
+    """
+    Returns the active scoring sections and weights from the database.
+    (Task 2: Eliminate Split-Brain Configuration)
+    """
+    sections = db.query(OppScoreSection).order_by(OppScoreSection.display_order).all()
+    return [
+        {
+            "section_code": s.section_code,
+            "section_name": s.section_name,
+            "weight": s.weight,
+            "display_order": s.display_order,
+            "reasons": REASON_OPTIONS.get(s.section_code, {})
+        }
+        for s in sections
+    ]
 
 class SectionInput(BaseModel):
     section_code: str
@@ -17,20 +104,31 @@ class SectionInput(BaseModel):
     notes: Optional[str] = ""
     selected_reasons: Optional[List[str]] = []
 
+class TeamInput(BaseModel):
+    practice_head_ids: Optional[List[str]] = None
+    sa_ids: Optional[List[str]] = None
+    sales_head: Optional[str] = None
+    sp: Optional[str] = None
+    legal: Optional[str] = None
+    finance: Optional[str] = None
+
 class ScoreInput(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None # Optional now, will use current_user if missing
     sections: List[SectionInput]
     confidence_level: Optional[str] = None
     recommendation: Optional[str] = None
     summary_comment: Optional[str] = None
     attachment_name: Optional[str] = None
+    financials: Optional[dict] = None # {deal_value: float, margin_percentage: float}
+    team: Optional[TeamInput] = None
 
 @router.get("/{opp_id}/latest")
 def get_latest_score(
     opp_id: str, 
     user_id: Optional[str] = Query(None), 
     version: Optional[int] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user)
 ):
     """
     Returns the latest assessment version for this user/opportunity.
@@ -47,10 +145,7 @@ def get_latest_score(
 
     if not latest: return {"status": "NOT_STARTED", "sections": []}
     
-    # LOGIC FIX: If an assessment is marked "SUBMITTED" but has no section values, 
-    # it's likely a stale or dummy record. Treat it as NOT_STARTED to allow the user to fill it.
-    if latest.status == "SUBMITTED" and not latest.section_values:
-        return {"status": "NOT_STARTED", "sections": []}
+    # Remove legacy logic fix that resets status to NOT_STARTED
 
     # Simple serialization
     sections = []
@@ -69,12 +164,9 @@ def get_latest_score(
             "selected_reasons": val.selected_reasons if val else []
         })
     
-    # DYNAMIC STATUS CHECK:
-    # If all scores are 0, it means no rating has been given yet.
-    has_ratings = any(s["score"] > 0 for s in sections)
+    # Use the actual status from the database without forced overrides
     current_status = latest.status
-    if not has_ratings:
-        current_status = "NOT_STARTED"
+    # has_ratings check removed to prevent 'ghost save' reset
         
     # Get Previous Version for Summary Block
     prev_assessment = None
@@ -94,103 +186,86 @@ def get_latest_score(
             "created_by": prev.created_by_user_id
         }
 
-    # GLOBAL STATUS CHECK:
-    # We need to know if SA/SP have submitted, regardless of which version we are looking at.
+    # GLOBAL STATUS CHECK removed as Bid Manager now exclusively owns the scoring process.
+    # We only need the opportunity object for locking metadata.
     opp_obj = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
     
-    global_sa_submitted = False
-    global_sp_submitted = False
-    
-    if opp_obj:
-        sa_id = opp_obj.assigned_sa_id
-        sp_id = opp_obj.assigned_sp_id
-        
-        if sa_id:
-            sa_ver = db.query(OppScoreVersion).filter(
-                OppScoreVersion.opp_id == opp_id,
-                OppScoreVersion.created_by_user_id == sa_id,
-                OppScoreVersion.status.in_(["SUBMITTED", "APPROVED", "REJECTED"])
-            ).first()
-            if sa_ver: global_sa_submitted = True
-            
-        if sp_id:
-            sp_ver = db.query(OppScoreVersion).filter(
-                OppScoreVersion.opp_id == opp_id,
-                OppScoreVersion.created_by_user_id == sp_id,
-                OppScoreVersion.status.in_(["SUBMITTED", "APPROVED", "REJECTED"])
-            ).first()
-            if sp_ver: global_sp_submitted = True
-
     return {
         "status": current_status,
         "version_no": latest.version_no,
-        "overall_score": latest.overall_score if has_ratings else 0,
+        "overall_score": latest.overall_score or 0,
         "confidence_level": latest.confidence_level,
         "recommendation": latest.recommendation,
         "summary_comment": latest.summary_comment,
         "attachment_name": latest.attachment_name,
-        "sa_submitted": global_sa_submitted,
-        "sp_submitted": global_sp_submitted,
         "sections": sections,
-        "prev_assessment": prev_assessment
+        "prev_assessment": prev_assessment,
+        "locked_by": opp_obj.locked_by if opp_obj else None,
+        "locked_at": opp_obj.locked_at if opp_obj else None
     }
 
 @router.post("/{opp_id}/draft")
-def save_draft(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
+def save_draft(opp_id: str, data: ScoreInput, db: Session = Depends(get_db), current_user: AppUser = Depends(get_current_user)):
+    user_role_codes = [ur.role.role_code for ur in current_user.user_roles]
+    if 'BM' not in user_role_codes:
+        raise HTTPException(status_code=403, detail="Only Bid Managers can modify scores.")
+    
+    user_id = data.user_id or current_user.user_id
     # Fetch opp to check workflow status later
     opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
     if not opp:
         raise HTTPException(404, "Opportunity not found")
-    # 1. Find the latest version FOR THIS USER
-    last = db.query(OppScoreVersion).filter(
-        OppScoreVersion.opp_id == opp_id,
-        OppScoreVersion.created_by_user_id == data.user_id
-    ).order_by(desc(OppScoreVersion.version_no)).first()
-    
-    # 2. Reuse latest version if it's not fully finalized
-    # Fully finalized = APPROVED, REJECTED
-    # If I have a draft that is UNDER_ASSESSMENT vs SUBMITTED...
-    
-    # Find the global latest version number for this opportunity (across all users)
-    global_max_ver = db.query(func.max(OppScoreVersion.version_no)).filter(OppScoreVersion.opp_id == opp_id).scalar() or 0
-    target_ver_no = global_max_ver if global_max_ver > 0 else 1
-    
-    # Collaborative check: Is the current version finalized?
-    # If ANY record for this version is APPROVED/REJECTED, it means the round is closed.
-    current_ver_record = db.query(OppScoreVersion).filter(
-        OppScoreVersion.opp_id == opp_id,
-        OppScoreVersion.version_no == target_ver_no
-    ).order_by(desc(OppScoreVersion.created_at)).first()
 
-    if current_ver_record and current_ver_record.status in ['APPROVED', 'REJECTED']:
-        target_ver_no += 1
-        current_ver_record = None
+    # Task 1: Concurrency Control (Locking)
+    # Check if locked by another user
+    if opp.locked_by and opp.locked_by != user_id:
+        # Check if lock is fresh (last 15 mins)
+        now = datetime.now(timezone.utc)
+        lock_at = opp.locked_at
+        if lock_at.tzinfo is None:
+            lock_at = lock_at.replace(tzinfo=timezone.utc)
+        
+        lock_duration = (now - lock_at).total_seconds()
+        if lock_duration < 900: # 15 minutes
+            locked_user = db.query(AppUser).filter(AppUser.user_id == opp.locked_by).first()
+            user_name = locked_user.display_name if locked_user else "Another user"
+            raise HTTPException(409, f"This assessment is currently being edited by {user_name}")
+    
+    # Update lock
+    opp.locked_by = user_id
+    opp.locked_at = datetime.now(timezone.utc)
+    db.flush()
 
-    if current_ver_record:
-        # REUSE shared version for collaboration
-        draft = current_ver_record
-        # If the current user is an SA or SP, and they are saving a draft,
-        # ensure their submission flag is reset if the version was previously submitted
-        # and the workflow status allows re-opening.
-        if opp.assigned_sa_id == data.user_id:
-            draft.sa_submitted = False
-        if opp.assigned_sp_id == data.user_id:
-            draft.sp_submitted = False
-
-        if draft.status == 'SUBMITTED' and opp.workflow_status not in ['APPROVED', 'REJECTED']:
-             # Re-open if somehow marked submitted but global flow hasn't progressed
-             draft.status = 'UNDER_ASSESSMENT'
-    else:
-        # Create a new version for this round
+    # 1. Simplified version management: Always use the latest version for this opportunity
+    # regardless of who created it, unless it's finalized (APPROVED/REJECTED)
+    draft = db.query(OppScoreVersion).filter(OppScoreVersion.opp_id == opp_id).order_by(desc(OppScoreVersion.version_no)).first()
+    
+    if draft and draft.status in ['APPROVED', 'REJECTED']:
+        # Create a new version if the current one is finalized
+        new_ver_no = draft.version_no + 1
         draft = OppScoreVersion(
-            opp_id=opp_id, 
-            version_no=target_ver_no, 
-            status="UNDER_ASSESSMENT", 
-            created_by_user_id=data.user_id
+            opp_id=opp_id,
+            version_no=new_ver_no,
+            status="UNDER_ASSESSMENT",
+            created_by_user_id=user_id
         )
         db.add(draft)
-        db.flush() # Get score_version_id
-        
+        db.flush()
+    elif not draft:
+        # Initial version
+        draft = OppScoreVersion(
+            opp_id=opp_id,
+            version_no=1,
+            status="UNDER_ASSESSMENT",
+            created_by_user_id=user_id
+        )
+        db.add(draft)
+        db.flush()
+    else:
+        # Re-use current draft
+        if draft.status == "SUBMITTED":
+            draft.status = "UNDER_ASSESSMENT" # Re-open for the BM to edit
+    
     db.flush()
     
     draft.confidence_level = data.confidence_level
@@ -199,23 +274,11 @@ def save_draft(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
     draft.attachment_name = data.attachment_name
     
     valid_sections = {s.section_code: s.section_code for s in db.query(OppScoreSection).all()}
-    # Support Mapping for frontend descriptive keys to backend codes
-    section_map = {
-        "strategic_fit": "STRAT",
-        "win_probability": "WIN",
-        "financial_value": "FIN",
-        "competitive_position": "COMP",
-        "delivery_feasibility": "FEAS",
-        "customer_relationship": "CUST",
-        "risk_exposure": "RISK",
-        "compliance": "PROD",
-        "legal_readiness": "LEGAL"
-    }
-    
     saved_count = 0
     for s in data.sections:
-        code = section_map.get(s.section_code, s.section_code) # Map or use default
+        code = s.section_code 
         if code not in valid_sections:
+            logger.warning(f"Skipping unknown section code: {code}")
             continue
 
         val = db.query(OppScoreSectionValue).filter(
@@ -237,105 +300,73 @@ def save_draft(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
             ))
         saved_count += 1
             
+    # Task 3: Handle Financials and Team updates
+    if data.financials:
+        if 'deal_value' in data.financials: opp.deal_value = data.financials['deal_value']
+        if 'margin_percentage' in data.financials: opp.margin_percentage = data.financials['margin_percentage']
+        if 'pat_margin' in data.financials: opp.pat_margin = data.financials['pat_margin']
+    
+    if data.team:
+        if data.team.practice_head_ids: opp.assigned_practice_head_ids = data.team.practice_head_ids
+        if data.team.sa_ids: opp.assigned_sa_ids = data.team.sa_ids
+        if data.team.sales_head: opp.assigned_sales_head_id = data.team.sales_head
+        if data.team.sp: opp.assigned_sp_id = data.team.sp
+        if data.team.finance: opp.assigned_finance_id = data.team.finance
+        if data.team.legal: opp.assigned_legal_id = data.team.legal
+        
     db.commit()
     return {"status": "success", "saved_count": saved_count, "version_no": draft.version_no}
 
 @router.post("/{opp_id}/submit")
-def submit_score(opp_id: str, data: ScoreInput, db: Session = Depends(get_db)):
-    # 0. Pre-fetch Data
-    user = db.query(AppUser).filter(AppUser.user_id == data.user_id).first()
-    opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
-    if not user or not opp: raise HTTPException(404, "Data mismatch")
+def submit_score(opp_id: str, data: ScoreInput, db: Session = Depends(get_db), current_user: AppUser = Depends(get_current_user)):
+    user_role_codes = [ur.role.role_code for ur in current_user.user_roles]
+    if 'BM' not in user_role_codes:
+        raise HTTPException(status_code=403, detail="Only Bid Managers can modify scores.")
+        
+    try:
+        user_id = data.user_id or current_user.user_id
+        # 0. Pre-fetch Data
+        user = db.query(AppUser).filter(AppUser.user_id == user_id).first()
+        opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
+        if not user or not opp: raise HTTPException(404, "Data mismatch")
 
-    # 1. Save current changes
-    save_draft(opp_id, data, db) 
-    
-    # 2. Get active shared draft
-    draft = db.query(OppScoreVersion).filter(
-        OppScoreVersion.opp_id == opp_id
-    ).order_by(desc(OppScoreVersion.version_no)).first()
-    
-    if not draft:
-        raise HTTPException(400, "No active draft to submit")
-    
-    if draft.status in ["APPROVED", "REJECTED"]:
-        raise HTTPException(400, "Cannot re-submit a finalized assessment (Approved/Rejected).")
+        # 1. Save current changes
+        save_draft(opp_id, data, db, current_user=current_user) 
+        
+        # 2. Get active shared draft
+        draft = db.query(OppScoreVersion).filter(
+            OppScoreVersion.opp_id == opp_id
+        ).order_by(desc(OppScoreVersion.version_no)).first()
+        
+        if not draft:
+            raise HTTPException(400, "No active draft to submit")
+        
+        if draft.status in ["APPROVED", "REJECTED"]:
+            raise HTTPException(400, "Cannot re-submit a finalized assessment (Approved/Rejected).")
 
-    # Workflow status check to prevent submission after final decision
-    if opp.workflow_status in ['APPROVED', 'REJECTED']:
-         raise HTTPException(400, "Opportunity is already finalized.")
-    
-    # 3. Determine Role and Update Flags
-    is_sa = (opp.assigned_sa_id == user.user_id)
-    is_sp = (opp.assigned_sp_id == user.user_id)
-    
-    # Update this specific version's flags (though mostly we care about the version status)
-    if is_sa: draft.sa_submitted = True
-    if is_sp: draft.sp_submitted = True
-    
-    # Calculate Weighted Score
-    total_w, weighted_s = 0, 0
-    from sqlalchemy.orm import joinedload
-    vals = db.query(OppScoreSectionValue).options(joinedload(OppScoreSectionValue.section)).filter(
-        OppScoreSectionValue.score_version_id == draft.score_version_id
-    ).all()
-    
-    for v in vals:
-        if v.section:
-            weighted_s += (v.score * v.section.weight)
-            total_w += v.section.weight
-    
-    max_s = total_w * 5
-    draft.overall_score = int((weighted_s / max_s) * 100) if max_s > 0 else 0
-    
-    # Check Combined Completion
-    sa_id = opp.assigned_sa_id
-    sp_id = opp.assigned_sp_id
-    
-    # Logic: Done if (No one assigned) or (Assigned and flag is True)
-    sa_done = (sa_id is None) or draft.sa_submitted
-    sp_done = (sp_id is None) or draft.sp_submitted
-
-    # Fast Track Logic (3.5 - 4.0)
-    score_5 = (draft.overall_score / 100.0) * 5.0
-    is_fast_track = (3.5 <= score_5 <= 4.0)
-
-    if sa_done and sp_done:
-        # FULL SUBMISSION - Only if there is at least one actual submission
-        if draft.sa_submitted or draft.sp_submitted:
-            draft.status = "SUBMITTED"
-            draft.submitted_at = datetime.utcnow()
+        # Workflow status check to prevent submission after final decision
+        if opp.workflow_status in ['APPROVED', 'REJECTED']:
+             raise HTTPException(400, "Opportunity is already finalized.")
+        
+        # 3. Finalize and Submit (Simplified for Bid Manager control)
+        draft.status = "SUBMITTED"
+        draft.submitted_at = datetime.now(timezone.utc)
+        draft.overall_score = OpportunityService.calculate_overall_score(db, draft.score_version_id)
+        
+        # Update Opportunity Status
+        opp.workflow_status = "READY_FOR_REVIEW"
+        
+        # Financial Threshold Tripwire
+        OpportunityService.evaluate_compliance_routing(opp_id, db)
             
-            if is_fast_track:
-                opp.workflow_status = "PENDING_GH_APPROVAL"
-                if opp.ph_approval_status == 'PENDING': opp.ph_approval_status = 'NOTIFIED'
-                if opp.sh_approval_status == 'PENDING': opp.sh_approval_status = 'NOTIFIED'
-            else:
-                opp.workflow_status = "READY_FOR_REVIEW"
-        else:
-            # Nothing actually submitted yet
-            draft.status = "UNDER_ASSESSMENT"
-            opp.workflow_status = "UNDER_ASSESSMENT"
-    else:
-        # PARTIAL SUBMISSION - Keep in Assessment but update global flow
-        draft.status = "UNDER_ASSESSMENT" # Still taking input from the other party
-        
-        if is_fast_track:
-            # Even partial can trigger fast track if score is in range
-            opp.workflow_status = "PENDING_GH_APPROVAL"
-            if is_sa and opp.sh_approval_status == 'PENDING': opp.sh_approval_status = 'NOTIFIED' 
-            if is_sp and opp.ph_approval_status == 'PENDING': opp.ph_approval_status = 'NOTIFIED'
-        else:
-            if draft.sa_submitted: opp.workflow_status = "SA_SUBMITTED"
-            elif draft.sp_submitted: opp.workflow_status = "SP_SUBMITTED"
-            else: opp.workflow_status = "UNDER_ASSESSMENT"
-        
-    db.commit()
-    return {"status": "success", "overall_score": draft.overall_score, "workflow_status": opp.workflow_status}
+        db.commit()
+        return {"status": "success", "overall_score": draft.overall_score, "workflow_status": opp.workflow_status}
+    except Exception as e:
+        logger.error(f"Scoring Submit API Crashed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{opp_id}/combined-review")
-@router.get("/{opp_id}/combined-review")
-def get_combined_score(opp_id: str, version_no: Optional[int] = Query(None), db: Session = Depends(get_db)):
+def get_combined_score(opp_id: str, version_no: Optional[int] = Query(None), db: Session = Depends(get_db), current_user: AppUser = Depends(get_current_user)):
     """
     Fetch both SA and SP assessments for a side-by-side review.
     """
@@ -343,7 +374,7 @@ def get_combined_score(opp_id: str, version_no: Optional[int] = Query(None), db:
     if not opp: raise HTTPException(404, "Opportunity not found")
     
     # Find targets
-    sa_id = opp.assigned_sa_id
+    sa_ids = opp.assigned_sa_ids or []
     sp_id = opp.assigned_sp_id
     
     # Fetch only the single shared version record
@@ -384,7 +415,7 @@ def get_combined_score(opp_id: str, version_no: Optional[int] = Query(None), db:
     unified = serialize_ver(ver)
 
     # Resolve SA and SP names even if they haven't submitted
-    sa_user = db.query(AppUser).filter(AppUser.user_id == sa_id).first() if sa_id else None
+    sa_user = db.query(AppUser).filter(AppUser.user_id == sa_ids[0]).first() if sa_ids else None
     sp_user = db.query(AppUser).filter(AppUser.user_id == sp_id).first() if sp_id else None
 
     return {
@@ -392,7 +423,7 @@ def get_combined_score(opp_id: str, version_no: Optional[int] = Query(None), db:
         "ready_for_review": (ver.sa_submitted and ver.sp_submitted) if ver else False,
         "sa_assessment": unified if (ver and ver.sa_submitted) else None,
         "sp_assessment": unified if (ver and ver.sp_submitted) else None,
-        "sa_info": {"id": sa_id, "name": sa_user.display_name if sa_user else "Not Assigned"},
+        "sa_info": {"id": sa_ids[0] if sa_ids else None, "name": sa_user.display_name if sa_user else "Not Assigned"},
         "sp_info": {"id": sp_id, "name": sp_user.display_name if sp_user else "Not Assigned"},
         "sa_submitted": ver.sa_submitted if ver else False,
         "sp_submitted": ver.sp_submitted if ver else False,
@@ -405,7 +436,11 @@ def get_combined_score(opp_id: str, version_no: Optional[int] = Query(None), db:
 
 
 @router.post("/{opp_id}/reopen")
-def reopen_assessment(opp_id: str, db: Session = Depends(get_db)):
+def reopen_assessment(opp_id: str, db: Session = Depends(get_db), current_user: AppUser = Depends(get_current_user)):
+    user_role_codes = [ur.role.role_code for ur in current_user.user_roles]
+    if 'BM' not in user_role_codes:
+        raise HTTPException(status_code=403, detail="Only Bid Managers can modify scores.")
+        
     latest = db.query(OppScoreVersion).filter(OppScoreVersion.opp_id == opp_id, OppScoreVersion.status == "SUBMITTED").order_by(desc(OppScoreVersion.version_no)).first()
     if not latest:
         raise HTTPException(404, "No submitted assessment found to re-open.")
@@ -422,7 +457,7 @@ def reopen_assessment(opp_id: str, db: Session = Depends(get_db)):
     return {"status": "success", "message": "Assessment re-opened as draft."}
 
 @router.get("/{opp_id}/history")
-def get_scoring_history(opp_id: str, db: Session = Depends(get_db)):
+def get_scoring_history(opp_id: str, db: Session = Depends(get_db), current_user: AppUser = Depends(get_current_user)):
     history = db.query(OppScoreVersion).filter(
         OppScoreVersion.opp_id == opp_id, 
         OppScoreVersion.status.in_(["SUBMITTED", "APPROVED", "REJECTED"])
@@ -444,7 +479,11 @@ def get_scoring_history(opp_id: str, db: Session = Depends(get_db)):
     return results
 
 @router.post("/{opp_id}/new-version")
-def create_new_version(opp_id: str, db: Session = Depends(get_db)):
+def create_new_version(opp_id: str, db: Session = Depends(get_db), current_user: AppUser = Depends(get_current_user)):
+    user_role_codes = [ur.role.role_code for ur in current_user.user_roles]
+    if 'BM' not in user_role_codes:
+        raise HTTPException(status_code=403, detail="Only Bid Managers can modify scores.")
+        
     # 1. Get the latest version (regardless of status)
     last = db.query(OppScoreVersion).filter(OppScoreVersion.opp_id == opp_id).order_by(desc(OppScoreVersion.version_no)).first()
     
@@ -493,7 +532,7 @@ def create_new_version(opp_id: str, db: Session = Depends(get_db)):
     return {"status": "success", "new_version": new_ver_no}
 
 @router.post("/{opp_id}/review/approve")
-def approve_score(opp_id: str, db: Session = Depends(get_db)):
+def approve_score(opp_id: str, db: Session = Depends(get_db), current_user: AppUser = Depends(require_role(["GH", "PH", "SH"]))):
     # 1. Update Score Version
     latest = db.query(OppScoreVersion).filter(
         OppScoreVersion.opp_id == opp_id, 
@@ -522,7 +561,7 @@ class RejectInput(BaseModel):
     reason: str
 
 @router.post("/{opp_id}/review/reject")
-def reject_score(opp_id: str, data: RejectInput, db: Session = Depends(get_db)):
+def reject_score(opp_id: str, data: RejectInput, db: Session = Depends(get_db), current_user: AppUser = Depends(require_role(["GH", "PH", "SH"]))):
     # 1. Update Score Version
     latest = db.query(OppScoreVersion).filter(
         OppScoreVersion.opp_id == opp_id, 

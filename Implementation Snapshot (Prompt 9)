@@ -1,0 +1,32 @@
+# Opportunity Scoring App – Current Implementation Snapshot
+
+## Section 9 — RBAC and Security
+
+| Feature | Status |
+| :--- | :--- |
+| **Authentication Logic** | No |
+| **Roles Implementation** | Yes |
+| **Permissions Enforcement** | No |
+
+### Analysis Details
+
+#### 1. Authentication
+*   **Backend Implementation**: No authentication mechanism is implemented at the API level. There are no middleware components for JWT verification, session management, or password hashing. The `auth` router contains endpoints to list and create users but does not perform credential validation.
+*   **Frontend Implementation**: Authentication is entirely mocked. The `AuthContext.tsx` uses a static `MOCK_USERS` object to simulate different user sessions. Selected user state is persisted in `localStorage` for session persistence across reloads.
+
+#### 2. Roles
+*   **Database Schema**: A comprehensive role-based schema is implemented in `backend/app/models.py`, featuring `AppUser`, `Role`, and `UserRole` tables.
+*   **Implemented Roles**: The system identifies five primary roles:
+    *   `GH` / `MANAGEMENT`: Global Head / Executive Leadership
+    *   `PH`: Practice Head
+    *   `SH`: Sales Head
+    *   `SA`: Solution Architect
+    *   `SP`: Sales Person / Presales
+*   **Role Mapping**: Users are assigned roles in the database, and the frontend consumes these roles via `UserContext.tsx` to drive the UI experience.
+
+#### 3. Permissions
+*   **API Level**: There is no enforcement of permissions on backend routes. All endpoints are accessible without role checks or authorization headers.
+*   **Frontend Level**: Permissions are implemented as "UI Visibility" rather than strict "Access Control." 
+    *   The `RoleSidebar.tsx` component dynamically shows or hides menu items based on the current user's role.
+    *   `App.tsx` handles initial redirection based on roles but does not wrap individual routes in permission-guarded components.
+*   **Logic Enforcement**: Workflow transitions (e.g., PH assigning an SA) are governed by business logic in the code but are not backed by a formal permission/capabilities matrix implementation.

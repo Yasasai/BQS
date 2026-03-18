@@ -1,0 +1,36 @@
+# Opportunity Scoring App – Current Implementation Snapshot
+
+## Section 8 — Reporting and Analytics
+
+### Implemented Reports
+The following reporting interfaces and functionalities are currently implemented in the codebase:
+
+*   **Management Dashboard**: A centralized dashboard that provides an overview of all opportunities. It features high-level metrics and a tabbed interface to filter opportunities by their current workflow stage (e.g., Action Required, In Progress, Under Review, Completed).
+*   **Leadership Governance Dashboard**: A specialized dashboard for senior leadership to review submitted assessments. It provides counts of assessments categorized by recommendation (Pursue, Caution, No-Bid) and displays the average weighted score across all submissions.
+*   **Practice Head Dashboard**: A role-specific dashboard for Practice Heads to monitor assignments within their practice, track progress, and handle approvals.
+*   **Sales Head Dashboard**: A role-specific dashboard for Sales Heads to manage team assignments (Sales Persons) and track pipeline health.
+*   **Exportable List Reports**: Users can export the filtered list of opportunities from the dashboards into the following formats:
+    *   **Excel (.xlsx)**: Full data export using `xlsx` library.
+    *   **CSV (.csv)**: Comma-separated values for data analysis.
+    *   **PDF (.pdf)**: Formatted table report using `jspdf` and `jspdf-autotable`.
+*   **Opportunity Detail & History**: A per-opportunity report showing the full history of assessment versions, scores, and associated documentation.
+
+### Dashboard Metrics
+The following metrics are dynamically calculated from the codebase (primarily via the `/api/opportunities/` backend endpoint):
+
+*   **Global Pipeline Value**: The total sum of the `deal_value` field for all opportunities in the current filtered view.
+*   **Action Required**: A count of opportunities that require immediate intervention by the logged-in user (e.g., opportunities missing an SA assignment for Practice Heads, or pending approvals).
+*   **In Progress**: The number of opportunities currently in the `UNDER_ASSESSMENT` or `IN_ASSESSMENT` workflow status.
+*   **Under Review / Review**: The count of opportunities where assessments have been submitted and are awaiting final approval from Practice/Sales/Global Heads.
+*   **Completed**: The number of opportunities where the assessment process has concluded (e.g., status is `APPROVED`, `REJECTED`, or `COMPLETED`).
+*   **Recommendation Distribution**: (Leadership Dashboard only) Counts of opportunities categorized by their assessment recommendation:
+    *   **Pursue**
+    *   **Caution**
+    *   **No-Bid**
+*   **Average Weighted Score**: (Leadership Dashboard only) The mean of the `overall_score` across all submitted assessment versions.
+
+> [!NOTE]
+> While the UI imports various charts and trend icons from the `lucide-react` library (e.g., `BarChart3`, `TrendingUp`, `PieChart`), **no actual data visualization charts or trend graphs** are currently implemented. These icons currently serve as decorative elements or navigational buttons.
+
+> [!IMPORTANT]
+> The **Leadership Governance Dashboard** currently uses mocked data for its metrics and submission list, as indicated by the TODO in `LeadershipDashboard.tsx`.

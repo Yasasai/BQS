@@ -1,7 +1,8 @@
 import React from 'react';
-import { X, LayoutDashboard, Inbox, FileText, Users, Settings, TrendingUp, CheckSquare, UserCheck } from 'lucide-react';
+import { X, LayoutDashboard, Inbox, FileText, Users, Settings, TrendingUp, CheckSquare, UserCheck, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
+import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
     isOpen: boolean;
@@ -11,12 +12,13 @@ interface SidebarProps {
 export const RoleSidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     const { currentUser } = useUser();
     const navigate = useNavigate();
+    const { logout } = useAuth();
 
     if (!isOpen) return null;
 
     // Determine user role
     const hasRole = (role: string) => currentUser?.roles?.includes(role);
-    const isManagement = hasRole('MANAGEMENT');
+    const isManagement = hasRole('MANAGEMENT') || hasRole('GH') || hasRole('PSH');
     const isPracticeHead = hasRole('PRACTICE_HEAD');
     const isSolutionArchitect = hasRole('SA') || hasRole('SOLUTION_ARCHITECT');
 
@@ -99,6 +101,27 @@ export const RoleSidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
                 {/* Menu Items */}
                 <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+                    {/* Management SECTION */}
+                    {isManagement && (
+                        <>
+                            <div style={{
+                                padding: '8px 16px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                color: '#757575',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px'
+                            }}>
+                                Administration
+                            </div>
+
+                            <MenuItem
+                                icon={<Settings size={18} />}
+                                label="Admin Panel"
+                                onClick={() => handleNavigation('/admin')}
+                            />
+                        </>
+                    )}
 
 
 
@@ -188,6 +211,15 @@ export const RoleSidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                         icon={<Settings size={18} />}
                         label="Settings"
                         onClick={() => handleNavigation('/settings')}
+                    />
+
+                    <MenuItem
+                        icon={<LogOut size={18} />}
+                        label="Log Out"
+                        onClick={() => {
+                            logout();
+                            navigate('/');
+                        }}
                     />
                 </div>
 
