@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 # Load environment variables
 load_dotenv()
 
-from backend.app.models import Base, Role, AppUser, UserRole, OppScoreSection, OppScoreVersion, OppScoreSectionValue, Opportunity, OpportunityAssignment, Practice, SyncRun, SyncMeta, OracleOpportunity, DocumentCategory
+from backend.app.models import Base, Role, AppUser, UserRole, OppScoreSection, OppScoreVersion, OppScoreSectionValue, Opportunity, OpportunityAssignment, Practice, SyncRun, SyncMeta, OracleOpportunity, DocumentCategory, SystemConfig
 from backend.app.core.logging_config import get_logger
 from backend.app.core.self_healing import heal_database
 
@@ -64,21 +64,26 @@ def init_db():
     Session = sessionmaker(bind=engine)
     db = Session()
     try:
-        # Roles - Read from INITIAL_ROLES env var (format: id:code:name,...)
-        if not db.query(Role).first():
-            roles_env = os.getenv("INITIAL_ROLES", "1:GH:Global Head,2:PH:Practice Head,3:SH:Sales Head,4:SA:Solution Architect,5:SP:Sales Person,6:PSH:Presales Head")
-            roles_to_add = []
-            for item in roles_env.split(","):
-                try:
-                    rid, rcode, rname = item.split(":")
-                    roles_to_add.append(Role(role_id=int(rid), role_code=rcode, role_name=rname))
-                except ValueError:
-                    logger.warning(f"Invalid role format in INITIAL_ROLES: {item}")
-            
-            if roles_to_add:
-                db.add_all(roles_to_add)
-                db.flush()
-                logger.info(f"Seeded {len(roles_to_add)} roles from environment.")
+        # Roles — upsert from INITIAL_ROLES so BM/ADMIN are added even on existing DBs
+        roles_env = os.getenv("INITIAL_ROLES", "1:GH:Global Head,2:PH:Practice Head,3:SH:Sales Head,4:SA:Solution Architect,5:SP:Sales Person,6:PSH:Presales Head,7:BM:Bid Manager,8:ADMIN:Admin,9:LEGAL:Legal,10:FINANCE:Finance")
+        for item in roles_env.split(","):
+            try:
+                rid, rcode, rname = item.split(":")
+                existing_role = db.query(Role).filter(Role.role_code == rcode).first()
+                if not existing_role:
+                    db.add(Role(role_id=int(rid), role_code=rcode, role_name=rname))
+            except ValueError:
+                logger.warning(f"Invalid role format in INITIAL_ROLES: {item}")
+        db.flush()
+        logger.info("Roles upsert complete.")
+
+        # SystemConfig — seed default GO/NO-GO threshold if not present
+        if not db.query(SystemConfig).filter(SystemConfig.config_key == 'go_no_go_threshold_percent').first():
+            db.add(SystemConfig(
+                config_key='go_no_go_threshold_percent',
+                config_value={"threshold": 80, "comparison_operator": "greater_than"}
+            ))
+            logger.info("Seeded default GO/NO-GO threshold config (80%).")
 
         # Sections - Synchronized with Frontend ScoreOpportunity.tsx
         # Task 2: Serve config from backend

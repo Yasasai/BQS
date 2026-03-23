@@ -47,13 +47,16 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Seed data  --  emails MUST match MOCK_USERS in AuthContext.tsx
 # ---------------------------------------------------------------------------
 ROLES_DATA = [
-    {"role_id": 1, "role_code": "GH", "role_name": "Global Head"},
-    {"role_id": 2, "role_code": "PH", "role_name": "Practice Head"},
-    {"role_id": 3, "role_code": "SH", "role_name": "Sales Head"},
-    {"role_id": 4, "role_code": "SA", "role_name": "Solution Architect"},
-    {"role_id": 5, "role_code": "SP", "role_name": "Sales Person"},
-    {"role_id": 6, "role_code": "LEGAL", "role_name": "Legal Head"},
-    {"role_id": 7, "role_code": "FINANCE", "role_name": "Finance Head"},
+    {"role_id": 1,  "role_code": "GH",      "role_name": "Global Head"},
+    {"role_id": 2,  "role_code": "PH",      "role_name": "Practice Head"},
+    {"role_id": 3,  "role_code": "SH",      "role_name": "Sales Head"},
+    {"role_id": 4,  "role_code": "SA",      "role_name": "Solution Architect"},
+    {"role_id": 5,  "role_code": "SP",      "role_name": "Sales Person"},
+    {"role_id": 6,  "role_code": "PSH",     "role_name": "Presales Head"},
+    {"role_id": 7,  "role_code": "BM",      "role_name": "Bid Manager"},
+    {"role_id": 8,  "role_code": "ADMIN",   "role_name": "Admin"},
+    {"role_id": 9,  "role_code": "LEGAL",   "role_name": "Legal"},
+    {"role_id": 10, "role_code": "FINANCE", "role_name": "Finance"},
 ]
 
 USERS_DATA = [
@@ -135,6 +138,16 @@ USERS_DATA = [
     {"user_id": "21", "email": "legal1@company.com", "display_name": "Amit Sharma - Legal", "role_code": "LEGAL"},
     {"user_id": "22", "email": "legal2@company.com", "display_name": "Priya Menon - Legal", "role_code": "LEGAL"},
     {"user_id": "23", "email": "legal3@company.com", "display_name": "Rohit Gupta - Legal", "role_code": "LEGAL"},
+
+    # Bid Managers
+    {"user_id": "bm-001", "email": "rahul.bidmanager@inspiraenterprise.com",
+     "display_name": "Rahul Bid Manager",    "role_code": "BM"},
+    {"user_id": "bm-002", "email": "sneha.bidmanager@inspiraenterprise.com",
+     "display_name": "Sneha Bid Manager",    "role_code": "BM"},
+
+    # Admins
+    {"user_id": "admin-001", "email": "admin@inspiraenterprise.com",
+     "display_name": "System Admin",         "role_code": "ADMIN"},
 ]
 
 
@@ -214,11 +227,13 @@ def seed():
 
         print("\nSeeding complete!")
         print("\nQuick-login credentials (email-only auth):")
+        print("  Admin              -> admin@inspiraenterprise.com")
         print("  Global Head        -> james.wilson@inspiraenterprise.com")
         print("  Practice Head      -> sarah.mitchell@inspiraenterprise.com")
         print("  Sales Head         -> robert.chen@inspiraenterprise.com")
         print("  Solution Architect -> john.architect@inspiraenterprise.com")
         print("  Sales Person       -> emily.sales@inspiraenterprise.com")
+        print("  Bid Manager        -> rahul.bidmanager@inspiraenterprise.com")
         print("")
 
     except Exception as exc:

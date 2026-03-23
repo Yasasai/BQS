@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, or_, and_, func, cast, String
 from typing import List, Optional, Any
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from pydantic import BaseModel
 from backend.app.core.database import get_db
 from backend.app.models import Opportunity, OpportunityAssignment, OppScoreVersion, Practice, AppUser, OppScoreSectionValue, DocumentCategory
@@ -115,6 +115,8 @@ class OpportunityResponse(BaseModel):
     combined_submission_ready: Optional[bool] = False
     recommendation: Optional[str] = None
     confidence_level: Optional[str] = None
+    bid_manager_user_id: Optional[str] = None
+    bid_manager: Optional[str] = None
 
 class PaginatedOpportunityResponse(BaseModel):
     items: List[dict]
@@ -202,10 +204,12 @@ def assign_role(opp_id: str, req: AssignRequest, db: Session = Depends(get_db), 
     user_role_codes = [ur.role.role_code for ur in current_user.user_roles]
     if 'BM' not in user_role_codes:
         raise HTTPException(status_code=403, detail="Only Bid Managers can assign pursuit team members.")
-        
+
     opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
     if not opp:
         raise HTTPException(status_code=404, detail="Opportunity not found")
+    if opp.workflow_status == 'CLOSED':
+        raise HTTPException(status_code=409, detail="Cannot modify team assignments on a CLOSED opportunity.")
         
     # Enforce validation: Pydantic Optional[str] already ensures these are strings not arrays
     # But we can add explicit logging or extra checks if needed.
@@ -243,6 +247,109 @@ def process_approval_endpoint(opp_id: str, req: ApprovalRequest, db: Session = D
         user_id=req.user_id
     )
 
+class AssignBidManagerRequest(BaseModel):
+    bid_manager_user_id: str
+
+@router.post("/{opp_id}/assign-bid-manager")
+def assign_bid_manager(
+    opp_id: str,
+    req: AssignBidManagerRequest,
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user)
+):
+    """Admin or Global Head assigns a Bid Manager to an opportunity. Transitions OPEN → ACTIVE."""
+    user_role_codes = [ur.role.role_code for ur in current_user.user_roles]
+    if not any(r in user_role_codes for r in ('GH', 'ADMIN')):
+        raise HTTPException(status_code=403, detail="Only Admin or Global Head can assign a Bid Manager.")
+
+    opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
+    if not opp:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    if opp.workflow_status == 'CLOSED':
+        raise HTTPException(status_code=409, detail="Cannot reassign Bid Manager on a CLOSED opportunity. Reopen it first.")
+
+    # Validate target user exists and has BM role
+    target = db.query(AppUser).filter(AppUser.user_id == req.bid_manager_user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Target user not found")
+
+    opp.bid_manager_user_id = req.bid_manager_user_id
+
+    # OPEN → ACTIVE when BM is first assigned
+    if opp.workflow_status in ('OPEN', 'NEW_FROM_CRM', 'ASSIGNED_TO_SA', None):
+        opp.workflow_status = 'ACTIVE'
+
+    db.add(OpportunityAssignment(
+        opp_id=opp_id,
+        assigned_to_user_id=req.bid_manager_user_id,
+        assigned_by_user_id=current_user.user_id,
+        status="ACTIVE"
+    ))
+    db.commit()
+    return {"status": "success", "workflow_status": opp.workflow_status}
+
+
+class CloseOpportunityRequest(BaseModel):
+    close_reason: str  # WON or LOST
+    attachment_name: Optional[str] = None
+
+@router.post("/{opp_id}/close")
+def close_opportunity(
+    opp_id: str,
+    req: CloseOpportunityRequest,
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user)
+):
+    """Bid Manager closes an ACTIVE or REOPENED opportunity. Requires WON or LOST reason."""
+    user_role_codes = [ur.role.role_code for ur in current_user.user_roles]
+    if 'BM' not in user_role_codes:
+        raise HTTPException(status_code=403, detail="Only Bid Managers can close an opportunity.")
+
+    if req.close_reason.upper() not in ('WON', 'LOST'):
+        raise HTTPException(status_code=422, detail="close_reason must be WON or LOST.")
+
+    opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
+    if not opp:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    if opp.workflow_status not in ('ACTIVE', 'REOPENED', 'UNDER_ASSESSMENT', 'READY_FOR_REVIEW', 'WAITING_PH_APPROVAL', 'READY_FOR_MGMT_REVIEW'):
+        raise HTTPException(status_code=409, detail=f"Cannot close opportunity in status '{opp.workflow_status}'.")
+    if opp.bid_manager_user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Only the assigned Bid Manager can close this opportunity.")
+
+    opp.workflow_status = 'CLOSED'
+    opp.close_reason = req.close_reason.upper()
+    opp.closed_by = current_user.user_id
+    opp.closed_at = datetime.now(timezone.utc)
+
+    db.commit()
+    return {"status": "success", "workflow_status": "CLOSED", "close_reason": opp.close_reason}
+
+
+@router.post("/{opp_id}/reopen")
+def reopen_opportunity(
+    opp_id: str,
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user)
+):
+    """Admin-only: reopen a CLOSED opportunity → REOPENED."""
+    user_role_codes = [ur.role.role_code for ur in current_user.user_roles]
+    if 'ADMIN' not in user_role_codes:
+        raise HTTPException(status_code=403, detail="Only Admin can reopen a closed opportunity.")
+
+    opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
+    if not opp:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    if opp.workflow_status != 'CLOSED':
+        raise HTTPException(status_code=409, detail="Only CLOSED opportunities can be reopened.")
+
+    opp.workflow_status = 'REOPENED'
+    opp.reopened_by = current_user.user_id
+    opp.reopened_at = datetime.now(timezone.utc)
+
+    db.commit()
+    return {"status": "success", "workflow_status": "REOPENED"}
+
+
 class FinancialsUpdate(BaseModel):
     deal_value: Optional[float] = None
     pat_margin: Optional[float] = None
@@ -252,15 +359,17 @@ def update_financials(opp_id: str, data: FinancialsUpdate, db: Session = Depends
     user_role_codes = [ur.role.role_code for ur in current_user.user_roles]
     if 'BM' not in user_role_codes:
         raise HTTPException(status_code=403, detail="Only Bid Managers can modify financial data.")
-    
+
     opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
     if not opp:
         raise HTTPException(status_code=404, detail="Opportunity not found")
-    
+    if opp.workflow_status == 'CLOSED':
+        raise HTTPException(status_code=409, detail="Financial data cannot be modified on a CLOSED opportunity.")
+
     if data.deal_value is not None:
         opp.deal_value = data.deal_value
     if data.pat_margin is not None:
         opp.pat_margin = data.pat_margin
-    
+
     db.commit()
     return {"status": "success", "deal_value": opp.deal_value, "pat_margin": opp.pat_margin}

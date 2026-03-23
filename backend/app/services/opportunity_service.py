@@ -113,10 +113,13 @@ def get_paginated_opportunities_logic(
     # Role/Target filtering + Hierarchy Visibility
     hierarchy_filter = (AppUser.manager_email == current_user_email) if current_user_email else False
     
-    if role == 'GH':
-        pass # Explicitly bypass user ID assignment filters for Global Head
+    if role in ('GH', 'ADMIN'):
+        pass  # Full visibility — no user-scoping filter
+    elif role == 'BM':
+        query = query.filter(
+            Opportunity.bid_manager_user_id == user_id
+        ) if user_id else query.filter(False)
     elif role == 'PH':
-        # Check if user_id is in assigned_practice_head_ids (JSON array) OR downline
         query = query.filter(or_(
             cast(Opportunity.assigned_practice_head_ids, String).like(f'%"{user_id}"%'),
             hierarchy_filter
@@ -126,27 +129,26 @@ def get_paginated_opportunities_logic(
             Opportunity.assigned_sales_head_id == user_id,
             hierarchy_filter
         )) if user_id else query.filter(False)
-    elif role in ['SA', 'SP', 'LEGAL', 'FINANCE', 'LL']:
-        if role == 'SA':
-            query = query.filter(or_(
-                cast(Opportunity.assigned_sa_ids, String).like(f'%"{user_id}"%'),
-                hierarchy_filter
-            )) if user_id else query.filter(False)
-        elif role == 'SP':
-            query = query.filter(or_(
-                Opportunity.assigned_sp_id == user_id,
-                hierarchy_filter
-            )) if user_id else query.filter(False)
-        elif role in ['LEGAL', 'LL']:
-            query = query.filter(or_(
-                Opportunity.assigned_legal_id == user_id,
-                hierarchy_filter
-            )) if user_id else query.filter(False)
-        elif role == 'FINANCE':
-            query = query.filter(or_(
-                Opportunity.assigned_finance_id == user_id,
-                hierarchy_filter
-            )) if user_id else query.filter(False)
+    elif role == 'SA':
+        query = query.filter(or_(
+            cast(Opportunity.assigned_sa_ids, String).like(f'%"{user_id}"%'),
+            hierarchy_filter
+        )) if user_id else query.filter(False)
+    elif role == 'SP':
+        query = query.filter(or_(
+            Opportunity.assigned_sp_id == user_id,
+            hierarchy_filter
+        )) if user_id else query.filter(False)
+    elif role in ('LEGAL', 'LL'):
+        query = query.filter(or_(
+            Opportunity.assigned_legal_id == user_id,
+            hierarchy_filter
+        )) if user_id else query.filter(False)
+    elif role == 'FINANCE':
+        query = query.filter(or_(
+            Opportunity.assigned_finance_id == user_id,
+            hierarchy_filter
+        )) if user_id else query.filter(False)
 
     # Tab filtering
     rev_stats = ['READY_FOR_REVIEW', 'UNDER_REVIEW', 'SA_SUBMITTED', 'SP_SUBMITTED', 'PENDING_GH_APPROVAL', 'PENDING_FINAL_APPROVAL', 'SUBMITTED', 'SUBMITTED_FOR_REVIEW']
@@ -156,6 +158,14 @@ def get_paginated_opportunities_logic(
     tab_filters = []
     for t in tabs:
         if t == 'all': tab_filters.append(True)
+        elif t == 'closed':
+            tab_filters.append(Opportunity.workflow_status == 'CLOSED')
+        elif t == 'current-assignments':
+            # BM active work: assigned and not CLOSED
+            tab_filters.append(and_(
+                Opportunity.bid_manager_user_id == user_id,
+                Opportunity.workflow_status.notin_(['CLOSED'])
+            ))
         elif t in ['review', 'pending-review', 'submitted']:
             tab_filters.append(Opportunity.workflow_status.in_(rev_stats))
         elif t == 'completed':
@@ -233,6 +243,8 @@ def get_paginated_opportunities_logic(
             "currency": o.currency or "USD",
             "workflow_status": status,
             "sales_stage": o.stage or "Qualifying",
+            "bid_manager_user_id": o.bid_manager_user_id,
+            "bid_manager": gname(db, o.bid_manager_user_id),
             "geo": o.geo or "Global",
             "close_date": o.close_date.strftime("%Y-%m-%d") if o.close_date else None,
             "sales_owner": gname(db, o.sales_owner_user_id) or "N/A",
@@ -286,8 +298,12 @@ def get_opportunity_counts_logic(
     
     hierarchy_filter = (AppUser.manager_email == current_user_email) if current_user_email else False
 
-    if role == 'GH':
-        pass # Explicitly bypass user ID assignment filters for Global Head
+    if role in ('GH', 'ADMIN'):
+        pass  # Full visibility
+    elif role == 'BM':
+        base_role = base_role.filter(
+            Opportunity.bid_manager_user_id == user_id
+        ) if user_id else base_role.filter(False)
     elif role == 'PH':
         base_role = base_role.filter(or_(
             cast(Opportunity.assigned_practice_head_ids, String).like(f'%"{user_id}"%'),
@@ -298,20 +314,37 @@ def get_opportunity_counts_logic(
             Opportunity.assigned_sales_head_id == user_id,
             hierarchy_filter
         )) if user_id else base_role.filter(False)
-    elif role in ['SA', 'SP']:
-        if role == 'SA':
-            base_role = base_role.filter(or_(
-                cast(Opportunity.assigned_sa_ids, String).like(f'%"{user_id}"%'),
-                hierarchy_filter
-            )) if user_id else base_role.filter(False)
-        else:
-            base_role = base_role.filter(or_(
-                Opportunity.assigned_sp_id == user_id,
-                hierarchy_filter
-            )) if user_id else base_role.filter(False)
+    elif role == 'SA':
+        base_role = base_role.filter(or_(
+            cast(Opportunity.assigned_sa_ids, String).like(f'%"{user_id}"%'),
+            hierarchy_filter
+        )) if user_id else base_role.filter(False)
+    elif role == 'SP':
+        base_role = base_role.filter(or_(
+            Opportunity.assigned_sp_id == user_id,
+            hierarchy_filter
+        )) if user_id else base_role.filter(False)
+    elif role in ('LEGAL', 'LL'):
+        base_role = base_role.filter(or_(
+            Opportunity.assigned_legal_id == user_id,
+            hierarchy_filter
+        )) if user_id else base_role.filter(False)
+    elif role == 'FINANCE':
+        base_role = base_role.filter(or_(
+            Opportunity.assigned_finance_id == user_id,
+            hierarchy_filter
+        )) if user_id else base_role.filter(False)
 
     counts = {}
-    if role == 'PH':
+    if role == 'BM':
+        current = base_role.filter(Opportunity.workflow_status != 'CLOSED').count()
+        closed = base_role.filter(Opportunity.workflow_status == 'CLOSED').count()
+        counts = {
+            "all": base_role.count(),
+            "current-assignments": current,
+            "closed": closed,
+        }
+    elif role == 'PH':
         f_comp = base_role.filter(or_(Opportunity.workflow_status.in_(comp_stats), Opportunity.ph_approval_status.in_(['APPROVED', 'REJECTED', 'NOTIFIED']))).count()
         f_rev = base_role.filter(Opportunity.workflow_status.in_(rev_stats)).count()
         f_act_assign = base_role.filter(and_(Opportunity.workflow_status.notin_(comp_stats + rev_stats), Opportunity.assigned_sa_id.is_(None))).count()
@@ -353,7 +386,8 @@ def get_opportunity_by_id_logic(db: Session, opp_id: str):
         ).first() is not None
 
     status = o.workflow_status
-    if not status or status in ['OPEN', 'ASSIGNED_TO_SA', 'ASSIGNED_TO_SP']:
+    spec_states = {'OPEN', 'ACTIVE', 'CLOSED', 'REOPENED'}
+    if not status or (status not in spec_states and status in ['ASSIGNED_TO_SA', 'ASSIGNED_TO_SP']):
         if latest_score:
             if latest_score.status == 'SUBMITTED': status = "SUBMITTED"
             elif latest_score.status in ['APPROVED', 'REJECTED']: status = latest_score.status
@@ -362,8 +396,8 @@ def get_opportunity_by_id_logic(db: Session, opp_id: str):
             else: status = "NEW"
         elif (o.assigned_sa_ids and len(o.assigned_sa_ids) > 0) or o.assigned_sp_id: status = "ASSIGNED"
         else: status = "NEW"
-    
-    if o.workflow_status == "UNDER_ASSESSMENT" and status in ["NEW", "ASSIGNED"]:
+
+    if status not in spec_states and o.workflow_status == "UNDER_ASSESSMENT" and status in ["NEW", "ASSIGNED"]:
         status = "UNDER_ASSESSMENT"
 
     return {
@@ -457,7 +491,7 @@ class OpportunityService:
     def evaluate_compliance_routing(opp_id: str, db: Session):
         """
         Enforce MVP business rules.
-        If deal_value > 5 Crores (50,000,000) AND margin_percentage < 5.0, 
+        If deal_value > 5 Crores (50,000,000) AND margin_percentage < 5.0,
         set finance_approval_status and legal_approval_status to 'PENDING_MANDATORY'.
         """
         opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
@@ -469,4 +503,22 @@ class OpportunityService:
                 opp.finance_approval_status = 'PENDING_MANDATORY'
                 opp.legal_approval_status = 'PENDING_MANDATORY'
                 db.flush()
+
+    @staticmethod
+    def evaluate_go_no_go(db: Session, overall_score: int) -> str:
+        """
+        Determines GO or NO_GO recommendation based on the configurable threshold
+        stored in system_config. Defaults to 80% if config is missing.
+        Returns 'GO' or 'NO_GO'.
+        """
+        from backend.app.models import SystemConfig as _SystemConfig
+        cfg = db.query(_SystemConfig).filter(
+            _SystemConfig.config_key == 'go_no_go_threshold_percent'
+        ).first()
+
+        threshold = 80  # safe default
+        if cfg and isinstance(cfg.config_value, dict):
+            threshold = cfg.config_value.get('threshold', 80)
+
+        return 'GO' if overall_score > threshold else 'NO_GO'
 

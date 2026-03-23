@@ -2,9 +2,7 @@ import React from 'react';
 import { AuthProvider } from './context/AuthContext';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { OpportunityInbox } from './pages/OpportunityInbox';
-import { ScoreOpportunity } from './pages/ScoreOpportunity';
 import { UnifiedDashboard } from './pages/UnifiedDashboard';
-import { OpportunityDetail } from './pages/OpportunityDetail';
 import { Layout } from './components/Layout';
 import { UserProvider } from './context/UserContext';
 import { BidManagerWorkspace } from './pages/BidManagerWorkspace';
@@ -54,22 +52,30 @@ const LoginScreen = () => {
     };
 
     const getRoleIcon = (roles: string[]) => {
+        if (roles.includes('ADMIN')) return '🛡️';
         if (roles.includes('GH')) return '🌐';
         if (roles.includes('PSH')) return '🎯';
         if (roles.includes('PH')) return '🏛️';
         if (roles.includes('SH')) return '💼';
         if (roles.includes('SA')) return '🔧';
+        if (roles.includes('BM')) return '📋';
+        if (roles.includes('LEGAL')) return '⚖️';
+        if (roles.includes('FINANCE')) return '💰';
         return '🤝';
     };
 
     const getPrimaryRole = (roles: string[]) => {
         const roleLabels: Record<string, string> = {
+            ADMIN: 'Admin',
             GH: 'Global Head',
             PSH: 'Presales Head',
             PH: 'Practice Head',
             SH: 'Sales Head',
             SA: 'Solution Architect',
-            SP: 'Sales Person'
+            SP: 'Sales Person',
+            BM: 'Bid Manager',
+            LEGAL: 'Legal',
+            FINANCE: 'Finance',
         };
         return roles.map(r => roleLabels[r] || r).join(', ');
     };
@@ -183,7 +189,7 @@ const LoginScreen = () => {
                         Quick Role Login (Auto-selects First User)
                     </h3>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                        {['GH', 'PSH', 'PH', 'SH', 'SA', 'SP'].map((role) => (
+                        {['ADMIN', 'BM', 'GH', 'PH', 'SH', 'SA', 'SP', 'LEGAL', 'FINANCE'].map((role) => (
                             <button
                                 key={`dev-${role}`}
                                 onClick={() => handleDevLogin(role)}
@@ -265,7 +271,7 @@ function App() {
                             <Route path="/opportunity/:id" element={<ProtectedRoute><BidManagerWorkspace /></ProtectedRoute>} />
                             <Route path="/score/:id" element={<ProtectedRoute><BidManagerWorkspace /></ProtectedRoute>} />
                             <Route path="/admin" element={
-                                <ProtectedRoute allowedRoles={['GH']}>
+                                <ProtectedRoute allowedRoles={['GH', 'ADMIN']}>
                                     <AdminDashboard />
                                 </ProtectedRoute>
                             } />

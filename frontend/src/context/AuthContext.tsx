@@ -3,7 +3,7 @@ import apiClient from '../utils/apiClient';
 import { API_ENDPOINTS } from '../constants/apiEndpoints';
 
 // Define available roles from BQS_Prototype
-export type UserRole = 'GH' | 'PH' | 'SH' | 'SA' | 'SP' | 'PSH' | 'BM' | 'SL' | 'LEGAL' | 'FINANCE' | 'LL';
+export type UserRole = 'GH' | 'PH' | 'SH' | 'SA' | 'SP' | 'PSH' | 'BM' | 'SL' | 'LEGAL' | 'FINANCE' | 'LL' | 'ADMIN';
 
 // Define the User shape
 export interface User {
@@ -100,7 +100,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const ROLE_LABELS: Record<string, string> = {
             GH: 'Global Head', PH: 'Practice Head', SH: 'Sales Head',
             SA: 'Solution Architect', SP: 'Sales Person', PSH: 'Presales Head',
-            BM: 'Bid Manager', SL: 'Sales Lead', LEGAL: 'Legal Lead', FINANCE: 'Finance Controller', LL: 'Legal Lead'
+            BM: 'Bid Manager', SL: 'Sales Lead', LEGAL: 'Legal Lead', FINANCE: 'Finance Controller', LL: 'Legal Lead',
+            ADMIN: 'Admin',
         };
 
         const newUser: User = {
@@ -142,7 +143,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const ROLE_LABELS: Record<string, string> = {
             GH: 'Global Head', PH: 'Practice Head', SH: 'Sales Head',
             SA: 'Solution Architect', SP: 'Sales Person', PSH: 'Presales Head',
-            LEGAL: 'Legal Lead', FINANCE: 'Finance Controller', LL: 'Legal Lead'
+            BM: 'Bid Manager', LEGAL: 'Legal Lead', FINANCE: 'Finance Controller', LL: 'Legal Lead',
+            ADMIN: 'Admin',
         };
 
         const newUser: User = {

@@ -25,7 +25,12 @@ import {
     Calendar,
     User as UserIcon,
     ShieldCheck,
-    Scale
+    Scale,
+    Lock,
+    Archive,
+    Layers,
+    ThumbsUp,
+    ThumbsDown
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Opportunity } from '../types';
@@ -62,7 +67,6 @@ export const BidManagerWorkspace: React.FC = () => {
     const navigate = useNavigate();
     const { authFetch, user } = useAuth();
     const isBM = user?.role === 'BM';
-    const isReadOnly = !isBM;
 
     // State
     const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
@@ -70,9 +74,18 @@ export const BidManagerWorkspace: React.FC = () => {
     const [sectionValues, setSectionValues] = useState<Record<string, SectionValue>>({});
     const [categories, setCategories] = useState<DocumentCategory[]>([]);
     const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-    const [activeTab, setActiveTab] = useState<'assessment' | 'team'>('assessment');
+    const [activeTab, setActiveTab] = useState<'assessment' | 'team' | 'current-assignments' | 'closed'>('assessment');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [recommendation, setRecommendation] = useState<string | null>(null);
+    const [showCloseModal, setShowCloseModal] = useState(false);
+    const [closeReason, setCloseReason] = useState<'WON' | 'LOST'>('WON');
+    const [closing, setClosing] = useState(false);
+    const [bmOpportunities, setBmOpportunities] = useState<any[]>([]);
+    const [loadingBmList, setLoadingBmList] = useState(false);
+
+    const isClosed = opportunity?.workflow_status === 'CLOSED';
+    const isReadOnly = !isBM || isClosed;
 
     // Financials state (synced with opportunity but editable)
     const [financials, setFinancials] = useState({
@@ -149,6 +162,7 @@ export const BidManagerWorkspace: React.FC = () => {
                                 };
                             });
                             setSectionValues(vals);
+                            if (scoreData.recommendation) setRecommendation(scoreData.recommendation);
                         } else {
                             // Initialize with default values
                             const initialVals: Record<string, SectionValue> = {};
@@ -336,6 +350,47 @@ export const BidManagerWorkspace: React.FC = () => {
         }
     };
 
+    const handleClose = async () => {
+        setClosing(true);
+        try {
+            const res = await authFetch(`/api/opportunities/${id}/close`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ close_reason: closeReason })
+            });
+            if (res.ok) {
+                const updated = await authFetch(`/api/opportunities/${id}`);
+                if (updated.ok) setOpportunity(await updated.json());
+                setShowCloseModal(false);
+            } else {
+                const err = await res.json();
+                alert(`Error: ${err.detail || 'Failed to close opportunity'}`);
+            }
+        } catch (e) {
+            console.error('Close error:', e);
+        } finally {
+            setClosing(false);
+        }
+    };
+
+    const handleTabChange = async (tab: typeof activeTab) => {
+        setActiveTab(tab);
+        if ((tab === 'current-assignments' || tab === 'closed') && bmOpportunities.length === 0) {
+            setLoadingBmList(true);
+            try {
+                const res = await authFetch(`/api/opportunities/?limit=50&page=1`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setBmOpportunities(data.opportunities || data.items || []);
+                }
+            } catch (e) {
+                console.error('BM list fetch error:', e);
+            } finally {
+                setLoadingBmList(false);
+            }
+        }
+    };
+
     if (loading) return (
         <div className="flex items-center justify-center min-h-screen bg-slate-50 text-slate-900">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
@@ -359,19 +414,23 @@ export const BidManagerWorkspace: React.FC = () => {
                         <div className="flex items-center gap-2 mb-1">
                             <span className="text-xs font-bold tracking-widest text-indigo-600 uppercase">Opportunity Workspace</span>
                             <span className="text-slate-300">•</span>
-                            <span className="text-xs font-medium text-slate-500">#{opportunity.opp_number}</span>
+                            <span className="text-xs font-medium text-slate-500">#{opportunity.remote_id}</span>
                         </div>
-                        <h1 className="text-xl font-bold text-slate-900 truncate max-w-md">{opportunity.opp_name}</h1>
+                        <h1 className="text-xl font-bold text-slate-900 truncate max-w-md">{opportunity.name}</h1>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-6">
                     <div className="flex flex-col items-end">
                         <span className="text-[10px] uppercase tracking-tighter text-slate-400 font-bold mb-1">Workflow Status</span>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold border ${opportunity.workflow_status === 'APPROVED' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
-                            opportunity.workflow_status === 'REJECTED' ? 'bg-rose-50 text-rose-600 border-rose-200' :
-                                'bg-indigo-50 text-indigo-600 border-indigo-200'
-                            }`}>
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1 ${
+                            opportunity.workflow_status === 'CLOSED' ? 'bg-slate-100 text-slate-600 border-slate-300' :
+                            opportunity.workflow_status === 'REOPENED' ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                            opportunity.workflow_status === 'ACTIVE' ? 'bg-indigo-50 text-indigo-600 border-indigo-200' :
+                            opportunity.workflow_status === 'OPEN' ? 'bg-sky-50 text-sky-600 border-sky-200' :
+                            'bg-slate-50 text-slate-500 border-slate-200'
+                        }`}>
+                            {opportunity.workflow_status === 'CLOSED' && <Lock className="w-3 h-3" />}
                             {opportunity.workflow_status?.replace(/_/g, ' ')}
                         </span>
                     </div>
@@ -385,6 +444,23 @@ export const BidManagerWorkspace: React.FC = () => {
                                 }`}>{liveScore}%</span>
                         </div>
                     </div>
+
+                    {recommendation && (
+                        <>
+                            <div className="h-10 w-px bg-slate-200"></div>
+                            <div className="flex flex-col items-end">
+                                <span className="text-[10px] uppercase tracking-tighter text-slate-400 font-bold mb-1">Recommendation</span>
+                                <span className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1 ${
+                                    recommendation === 'GO'
+                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                                        : 'bg-rose-50 text-rose-600 border-rose-200'
+                                }`}>
+                                    {recommendation === 'GO' ? <ThumbsUp className="w-3 h-3" /> : <ThumbsDown className="w-3 h-3" />}
+                                    {recommendation === 'GO' ? 'GO' : 'NO GO'}
+                                </span>
+                            </div>
+                        </>
+                    )}
                 </div>
             </header>
 
@@ -410,7 +486,7 @@ export const BidManagerWorkspace: React.FC = () => {
                                 </div>
                                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                                     <div className="text-[10px] uppercase text-slate-400 font-bold mb-1">Sales Stage</div>
-                                    <div className="text-sm font-semibold text-slate-700">{opportunity.stage}</div>
+                                    <div className="text-sm font-semibold text-slate-700">{(opportunity as any).sales_stage || opportunity.stage}</div>
                                 </div>
                                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                                     <div className="text-[10px] uppercase text-slate-400 font-bold mb-1">Deal Value</div>
@@ -505,34 +581,110 @@ export const BidManagerWorkspace: React.FC = () => {
                 {/* Task 3: Right Pane (Action & Assessment) - 60% Width */}
                 <section className="w-[60%] flex flex-col relative h-full bg-slate-100">
                     {/* Tabs Navigation */}
-                    <div className="flex bg-white border-b border-slate-200 px-6 pt-2">
-                        <button
-                            onClick={() => setActiveTab('assessment')}
-                            className={`flex items-center gap-2 px-6 py-3 text-sm font-bold transition-all relative ${activeTab === 'assessment' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
+                    <div className="flex bg-white border-b border-slate-200 px-6 pt-2 overflow-x-auto">
+                        {[
+                            { key: 'assessment', icon: <BarChart3 className="w-4 h-4" />, label: '9-Factor Assessment' },
+                            { key: 'team', icon: <Users className="w-4 h-4" />, label: 'Team & Financials' },
+                            { key: 'current-assignments', icon: <Layers className="w-4 h-4" />, label: 'Current Assignments' },
+                            { key: 'closed', icon: <Archive className="w-4 h-4" />, label: 'Closed' },
+                        ].map(tab => (
+                            <button
+                                key={tab.key}
+                                onClick={() => handleTabChange(tab.key as typeof activeTab)}
+                                className={`flex items-center gap-2 px-5 py-3 text-sm font-bold transition-all relative whitespace-nowrap ${
+                                    activeTab === tab.key ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
                                 }`}
-                        >
-                            <BarChart3 className="w-4 h-4" />
-                            9-Factor Assessment
-                            {activeTab === 'assessment' && (
-                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 animate-in fade-in zoom-in-95"></div>
-                            )}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('team')}
-                            className={`flex items-center gap-2 px-6 py-3 text-sm font-bold transition-all relative ${activeTab === 'team' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
-                                }`}
-                        >
-                            <Users className="w-4 h-4" />
-                            Team & Financials
-                            {activeTab === 'team' && (
-                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 animate-in fade-in zoom-in-95"></div>
-                            )}
-                        </button>
+                            >
+                                {tab.icon}
+                                {tab.label}
+                                {activeTab === tab.key && (
+                                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 animate-in fade-in zoom-in-95"></div>
+                                )}
+                            </button>
+                        ))}
                     </div>
 
                     {/* Tab Content */}
                     <div className="flex-1 overflow-y-auto p-6 pb-24 custom-scrollbar bg-slate-100">
-                        {activeTab === 'assessment' ? (
+                        {activeTab === 'current-assignments' ? (
+                            <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                    <Layers className="w-5 h-5 text-indigo-600" /> My Active Assignments
+                                </h3>
+                                {loadingBmList ? (
+                                    <div className="flex justify-center py-12">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-600"></div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {bmOpportunities.filter(o => o.workflow_status !== 'CLOSED').length === 0 ? (
+                                            <p className="text-sm text-slate-500 italic text-center py-12">No active assignments.</p>
+                                        ) : bmOpportunities.filter(o => o.workflow_status !== 'CLOSED').map((opp: any) => (
+                                            <div
+                                                key={opp.id}
+                                                onClick={() => navigate(`/opportunity/${opp.id}`)}
+                                                className={`bg-white border rounded-xl p-4 cursor-pointer hover:border-indigo-300 hover:shadow-sm transition-all ${opp.id === id ? 'border-indigo-400 ring-1 ring-indigo-200' : 'border-slate-200'}`}
+                                            >
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-bold text-slate-800 truncate">{opp.name}</p>
+                                                        <p className="text-xs text-slate-500 mt-0.5">{opp.customer_name} · #{opp.remote_id}</p>
+                                                    </div>
+                                                    <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
+                                                        {opp.workflow_status}
+                                                    </span>
+                                                </div>
+                                                <div className="mt-2 flex items-center gap-3 text-[10px] text-slate-400">
+                                                    <span>{new Intl.NumberFormat('en-US', { style: 'currency', currency: opp.currency || 'USD', notation: 'compact' }).format(opp.deal_value)}</span>
+                                                    <span>·</span>
+                                                    <span>{opp.geo || 'Global'}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ) : activeTab === 'closed' ? (
+                            <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                    <Archive className="w-5 h-5 text-slate-500" /> Closed Opportunities
+                                </h3>
+                                {loadingBmList ? (
+                                    <div className="flex justify-center py-12">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-600"></div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {bmOpportunities.filter(o => o.workflow_status === 'CLOSED').length === 0 ? (
+                                            <p className="text-sm text-slate-500 italic text-center py-12">No closed opportunities.</p>
+                                        ) : bmOpportunities.filter(o => o.workflow_status === 'CLOSED').map((opp: any) => (
+                                            <div
+                                                key={opp.id}
+                                                onClick={() => navigate(`/opportunity/${opp.id}`)}
+                                                className="bg-white border border-slate-200 rounded-xl p-4 cursor-pointer hover:border-slate-300 hover:shadow-sm transition-all"
+                                            >
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-bold text-slate-700 truncate">{opp.name}</p>
+                                                        <p className="text-xs text-slate-500 mt-0.5">{opp.customer_name} · #{opp.remote_id}</p>
+                                                    </div>
+                                                    <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                                        opp.close_reason === 'WON' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-rose-50 text-rose-600 border-rose-200'
+                                                    }`}>
+                                                        {opp.close_reason || 'CLOSED'}
+                                                    </span>
+                                                </div>
+                                                <div className="mt-2 flex items-center gap-3 text-[10px] text-slate-400">
+                                                    <span>{new Intl.NumberFormat('en-US', { style: 'currency', currency: opp.currency || 'USD', notation: 'compact' }).format(opp.deal_value)}</span>
+                                                    <span>·</span>
+                                                    <span>{opp.geo || 'Global'}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ) : activeTab === 'assessment' ? (
                             <div className="space-y-6">
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className="text-lg font-bold text-slate-900">Scoring Criteria</h3>
@@ -645,36 +797,64 @@ export const BidManagerWorkspace: React.FC = () => {
                                     </h3>
                                     <div className="grid grid-cols-2 gap-6">
                                         <div className="space-y-2">
-                                            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Practice Head (Multi-select)</label>
-                                            <select
-                                                multiple={true}
-                                                value={team.practice_head_ids}
-                                                onChange={(e) => {
-                                                    const values = Array.from(e.target.selectedOptions, option => option.value);
-                                                    setTeam(prev => ({ ...prev, practice_head_ids: values }));
-                                                }}
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-700 focus:outline-none focus:border-indigo-500 transition-all font-medium min-h-[120px]"
-                                                disabled={isReadOnly}
-                                            >
-                                                {usersList.PH.map(u => <option key={u.user_id} value={u.user_id}>{u.display_name}</option>)}
-                                            </select>
-                                            <p className="text-[9px] text-slate-400 italic">Hold Ctrl/Cmd to select multiple</p>
+                                            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Practice Head</label>
+                                            <div className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden max-h-[160px] overflow-y-auto">
+                                                {usersList.PH.length === 0 ? (
+                                                    <p className="text-xs text-slate-400 p-3 italic">No Practice Heads available</p>
+                                                ) : usersList.PH.map(u => (
+                                                    <label key={u.user_id} className={`flex items-center gap-3 px-4 py-2.5 border-b border-slate-100 last:border-0 transition-colors ${isReadOnly ? 'opacity-60' : 'hover:bg-slate-100 cursor-pointer'}`}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={team.practice_head_ids.includes(u.user_id)}
+                                                            onChange={() => {
+                                                                if (isReadOnly) return;
+                                                                setTeam(prev => ({
+                                                                    ...prev,
+                                                                    practice_head_ids: prev.practice_head_ids.includes(u.user_id)
+                                                                        ? prev.practice_head_ids.filter(id => id !== u.user_id)
+                                                                        : [...prev.practice_head_ids, u.user_id]
+                                                                }));
+                                                            }}
+                                                            disabled={isReadOnly}
+                                                            className="w-4 h-4 rounded accent-indigo-600"
+                                                        />
+                                                        <span className="text-sm text-slate-700 font-medium">{u.display_name}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                            {team.practice_head_ids.length > 0 && (
+                                                <p className="text-[10px] text-indigo-500 font-medium">{team.practice_head_ids.length} selected</p>
+                                            )}
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Solution Architect (Multi-select)</label>
-                                            <select
-                                                multiple={true}
-                                                value={team.sa_ids}
-                                                onChange={(e) => {
-                                                    const values = Array.from(e.target.selectedOptions, option => option.value);
-                                                    setTeam(prev => ({ ...prev, sa_ids: values }));
-                                                }}
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-700 focus:outline-none focus:border-indigo-500 transition-all font-medium min-h-[120px]"
-                                                disabled={isReadOnly}
-                                            >
-                                                {usersList.SA.map(u => <option key={u.user_id} value={u.user_id}>{u.display_name}</option>)}
-                                            </select>
-                                            <p className="text-[9px] text-slate-400 italic">Hold Ctrl/Cmd to select multiple</p>
+                                            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Solution Architect</label>
+                                            <div className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden max-h-[160px] overflow-y-auto">
+                                                {usersList.SA.length === 0 ? (
+                                                    <p className="text-xs text-slate-400 p-3 italic">No Solution Architects available</p>
+                                                ) : usersList.SA.map(u => (
+                                                    <label key={u.user_id} className={`flex items-center gap-3 px-4 py-2.5 border-b border-slate-100 last:border-0 transition-colors ${isReadOnly ? 'opacity-60' : 'hover:bg-slate-100 cursor-pointer'}`}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={team.sa_ids.includes(u.user_id)}
+                                                            onChange={() => {
+                                                                if (isReadOnly) return;
+                                                                setTeam(prev => ({
+                                                                    ...prev,
+                                                                    sa_ids: prev.sa_ids.includes(u.user_id)
+                                                                        ? prev.sa_ids.filter(id => id !== u.user_id)
+                                                                        : [...prev.sa_ids, u.user_id]
+                                                                }));
+                                                            }}
+                                                            disabled={isReadOnly}
+                                                            className="w-4 h-4 rounded accent-indigo-600"
+                                                        />
+                                                        <span className="text-sm text-slate-700 font-medium">{u.display_name}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                            {team.sa_ids.length > 0 && (
+                                                <p className="text-[10px] text-indigo-500 font-medium">{team.sa_ids.length} selected</p>
+                                            )}
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Sales Head (SH)</label>
@@ -758,30 +938,119 @@ export const BidManagerWorkspace: React.FC = () => {
                         </div>
 
                         <div className="flex items-center gap-3">
-                            <button
-                                onClick={() => handleSave(false)}
-                                disabled={saving || isReadOnly}
-                                className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-slate-200 font-bold text-sm text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
-                            >
-                                <Save className="w-4 h-4" />
-                                Save Draft
-                            </button>
-                            <button
-                                onClick={() => handleSave(true)}
-                                disabled={saving || isReadOnly}
-                                className="flex items-center gap-2 px-8 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-sm text-white shadow-lg shadow-indigo-500/10 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
-                            >
-                                {saving ? (
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                ) : (
-                                    <Send className="w-4 h-4" />
-                                )}
-                                Submit Assessment
-                            </button>
+                            {isClosed ? (
+                                <span className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 text-slate-500 text-sm font-bold border border-slate-200">
+                                    <Lock className="w-4 h-4" /> Read-Only — Opportunity Closed
+                                </span>
+                            ) : (
+                                <>
+                                    <button
+                                        onClick={() => handleSave(false)}
+                                        disabled={saving || isReadOnly}
+                                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-slate-200 font-bold text-sm text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
+                                    >
+                                        <Save className="w-4 h-4" />
+                                        Save Draft
+                                    </button>
+                                    <button
+                                        onClick={() => handleSave(true)}
+                                        disabled={saving || isReadOnly}
+                                        className="flex items-center gap-2 px-8 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-sm text-white shadow-lg shadow-indigo-500/10 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                                    >
+                                        {saving ? (
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        ) : (
+                                            <Send className="w-4 h-4" />
+                                        )}
+                                        Submit Assessment
+                                    </button>
+                                    {isBM && (
+                                        <button
+                                            onClick={() => setShowCloseModal(true)}
+                                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-rose-200 text-rose-600 font-bold text-sm hover:bg-rose-50 transition-all"
+                                        >
+                                            <Archive className="w-4 h-4" />
+                                            Close Opportunity
+                                        </button>
+                                    )}
+                                </>
+                            )}
                         </div>
                     </footer>
                 </section>
             </main>
+
+            {/* Close Opportunity Modal */}
+            {showCloseModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 animate-in fade-in zoom-in-95">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 bg-rose-50 rounded-full flex items-center justify-center">
+                                <Archive className="w-5 h-5 text-rose-600" />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900">Close Opportunity</h2>
+                                <p className="text-xs text-slate-500">This action is irreversible without Admin reopen.</p>
+                            </div>
+                        </div>
+
+                        <p className="text-sm text-slate-600 mb-6">
+                            Select the final outcome for <span className="font-bold text-slate-800">{opportunity?.name}</span>.
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            <button
+                                onClick={() => setCloseReason('WON')}
+                                className={`flex flex-col items-center gap-2 p-5 rounded-xl border-2 font-bold text-sm transition-all ${
+                                    closeReason === 'WON'
+                                        ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                                        : 'border-slate-200 text-slate-500 hover:border-emerald-200 hover:bg-emerald-50/50'
+                                }`}
+                            >
+                                <ThumbsUp className="w-6 h-6" />
+                                WON
+                                <span className="text-[10px] font-normal">Bid was successful</span>
+                            </button>
+                            <button
+                                onClick={() => setCloseReason('LOST')}
+                                className={`flex flex-col items-center gap-2 p-5 rounded-xl border-2 font-bold text-sm transition-all ${
+                                    closeReason === 'LOST'
+                                        ? 'border-rose-400 bg-rose-50 text-rose-700'
+                                        : 'border-slate-200 text-slate-500 hover:border-rose-200 hover:bg-rose-50/50'
+                                }`}
+                            >
+                                <ThumbsDown className="w-6 h-6" />
+                                LOST
+                                <span className="text-[10px] font-normal">Bid was unsuccessful</span>
+                            </button>
+                        </div>
+
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => setShowCloseModal(false)}
+                                disabled={closing}
+                                className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleClose}
+                                disabled={closing}
+                                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm text-white shadow-lg transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 ${
+                                    closeReason === 'WON' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20' : 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20'
+                                }`}
+                            >
+                                {closing ? (
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                    <Archive className="w-4 h-4" />
+                                )}
+                                Confirm {closeReason}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <style>{`
         .custom-scrollbar::-webkit-scrollbar {

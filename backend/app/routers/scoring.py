@@ -211,10 +211,13 @@ def save_draft(opp_id: str, data: ScoreInput, db: Session = Depends(get_db), cur
         raise HTTPException(status_code=403, detail="Only Bid Managers can modify scores.")
     
     user_id = data.user_id or current_user.user_id
-    # Fetch opp to check workflow status later
     opp = db.query(Opportunity).filter(Opportunity.opp_id == opp_id).first()
     if not opp:
         raise HTTPException(404, "Opportunity not found")
+
+    # Closed-state guard — no edits permitted on CLOSED opportunities
+    if opp.workflow_status == 'CLOSED':
+        raise HTTPException(status_code=409, detail="Assessment cannot be modified on a CLOSED opportunity.")
 
     # Task 1: Concurrency Control (Locking)
     # Check if locked by another user
@@ -348,14 +351,17 @@ def submit_score(opp_id: str, data: ScoreInput, db: Session = Depends(get_db), c
         if opp.workflow_status in ['APPROVED', 'REJECTED']:
              raise HTTPException(400, "Opportunity is already finalized.")
         
-        # 3. Finalize and Submit (Simplified for Bid Manager control)
+        # 3. Finalize and Submit
         draft.status = "SUBMITTED"
         draft.submitted_at = datetime.now(timezone.utc)
         draft.overall_score = OpportunityService.calculate_overall_score(db, draft.score_version_id)
-        
+
+        # GO / NO-GO determination from configurable threshold (spec §11.3)
+        draft.recommendation = OpportunityService.evaluate_go_no_go(db, draft.overall_score)
+
         # Update Opportunity Status
         opp.workflow_status = "READY_FOR_REVIEW"
-        
+
         # Financial Threshold Tripwire
         OpportunityService.evaluate_compliance_routing(opp_id, db)
             

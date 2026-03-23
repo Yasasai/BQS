@@ -93,6 +93,13 @@ class Opportunity(Base):
     locked_by = Column(String, ForeignKey("app_user.user_id"), nullable=True)
     locked_at = Column(DateTime, nullable=True)
 
+    # --- Lifecycle Closure Columns ---
+    close_reason = Column(String, nullable=True)      # WON or LOST
+    closed_by = Column(String, ForeignKey("app_user.user_id"), nullable=True)
+    closed_at = Column(DateTime, nullable=True)
+    reopened_by = Column(String, ForeignKey("app_user.user_id"), nullable=True)
+    reopened_at = Column(DateTime, nullable=True)
+
     # Relationships
     user_locked = relationship("AppUser", foreign_keys=[locked_by])
     assignments = relationship("OpportunityAssignment", back_populates="opportunity")
@@ -276,3 +283,16 @@ class CRMSalesRep(Base):
     email_address = Column(String, nullable=True)
     last_seen_ts = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_synced_run_id = Column(String, ForeignKey("crm_sync_run.sync_run_id"), nullable=True)
+
+# --- 8. SYSTEM CONFIGURATION ---
+
+class SystemConfig(Base):
+    """
+    Key-value store for system-wide configuration values.
+    Used for GO/NO-GO threshold and other admin-configurable parameters.
+    """
+    __tablename__ = "system_config"
+    config_key = Column(String, primary_key=True)  # e.g. 'go_no_go_threshold_percent'
+    config_value = Column(JSON, nullable=False)      # stored as JSON for flexibility
+    updated_by = Column(String, ForeignKey("app_user.user_id"), nullable=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

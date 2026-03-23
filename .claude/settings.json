@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Coding/BQS/frontend/src/**)",
+      "Read(//c/Coding/BQS/frontend/src/context/**)",
+      "Read(//c/Coding/BQS/frontend/src/utils/**)",
+      "Read(//c/Coding/BQS/frontend/src/constants/**)",
+      "Read(//c/Coding/BQS/backend/alembic/versions/**)",
+      "Read(//c/Users/NikhilPoojari/.claude/projects/c--Coding-BQS/b5d053be-f3cf-4698-bdae-d1232042ec95/tool-results/**)"
+    ]
+  }
+}

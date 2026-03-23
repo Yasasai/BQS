@@ -74,7 +74,7 @@ from backend.app.core.auth import require_role
 
 admin_router = APIRouter(prefix="/api/admin/users", tags=["admin_users"])
 
-@admin_router.get("/", response_model=List[UserRead], dependencies=[Depends(require_role(["GH"]))])
+@admin_router.get("/", response_model=List[UserRead], dependencies=[Depends(require_role(["GH", "ADMIN"]))])
 def admin_list_users(db: Session = Depends(get_db)):
     users = db.query(AppUser).all()
     results = []
@@ -92,7 +92,7 @@ def admin_list_users(db: Session = Depends(get_db)):
         })
     return results
 
-@admin_router.post("/", response_model=UserRead, dependencies=[Depends(require_role(["GH"]))])
+@admin_router.post("/", response_model=UserRead, dependencies=[Depends(require_role(["GH", "ADMIN"]))])
 def admin_create_user(user: UserCreate, db: Session = Depends(get_db)):
     existing = db.query(AppUser).filter(AppUser.email == user.email).first()
     if existing:
@@ -127,7 +127,7 @@ def admin_create_user(user: UserCreate, db: Session = Depends(get_db)):
         "practice_name": new_user.practice_name
     }
 
-@admin_router.put("/{user_id}", response_model=UserRead, dependencies=[Depends(require_role(["GH"]))])
+@admin_router.put("/{user_id}", response_model=UserRead, dependencies=[Depends(require_role(["GH", "ADMIN"]))])
 def admin_update_user(user_id: str, updates: UserUpdate, db: Session = Depends(get_db)):
     db_user = db.query(AppUser).filter(AppUser.user_id == user_id).first()
     if not db_user:
@@ -160,7 +160,7 @@ def admin_update_user(user_id: str, updates: UserUpdate, db: Session = Depends(g
         "practice_name": db_user.practice_name
     }
 
-@admin_router.delete("/{user_id}", dependencies=[Depends(require_role(["GH"]))])
+@admin_router.delete("/{user_id}", dependencies=[Depends(require_role(["GH", "ADMIN"]))])
 def admin_delete_user(user_id: str, db: Session = Depends(get_db)):
     db_user = db.query(AppUser).filter(AppUser.user_id == user_id).first()
     if not db_user:

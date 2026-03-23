@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Inbox, User, LogOut, LayoutDashboard, FileText, CheckCircle, AlertCircle, PlayCircle, ChevronUp, ChevronDown, GripHorizontal, RefreshCw, Settings } from 'lucide-react';
+import { Home, Inbox, User, LogOut, LayoutDashboard, AlertCircle, RefreshCw, Settings } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -90,38 +90,10 @@ export function Sidebar() {
 
     const isPathActive = (path: string) => location.pathname === path;
 
-    const handleUserSwitch = (u: any) => {
+    const handleUserSwitch = async (u: any) => {
         switchUser(u.user_id);
-        const roles = (u.roles || []).map((r: string) => r.toUpperCase());
-        let targetRole: 'GH' | 'PH' | 'SH' | 'SA' | 'SP' | 'PSH' | 'LEGAL' | 'FINANCE' = 'SA';
-
-        if (roles.includes("MANAGEMENT") || roles.includes("GH") || roles.includes("GLOBAL_HEAD")) targetRole = 'GH';
-        else if (roles.includes("PSH") || roles.includes("PRESALES_HEAD")) targetRole = 'PSH';
-        else if (roles.includes("PRACTICE_HEAD") || roles.includes("PH")) targetRole = 'PH';
-        else if (roles.includes("SALES_HEAD") || roles.includes("SH") || roles.includes("SALES_LEAD")) targetRole = 'SH';
-        else if (roles.includes("SALES_PERSON") || roles.includes("SP") || roles.includes("SALES_REPRESENTATIVE")) targetRole = 'SP';
-        else if (roles.includes("SOLUTION_ARCHITECT") || roles.includes("SA")) targetRole = 'SA';
-        else if (roles.includes("LEGAL") || roles.includes("LL")) targetRole = 'LEGAL';
-        else if (roles.includes("FINANCE") || roles.includes("FIN")) targetRole = 'FINANCE';
-
-        login(targetRole, {
-            id: u.user_id,
-            email: u.email,
-            name: u.display_name,
-            role: targetRole,
-                        displayRole: targetRole === 'GH' ? 'Global Head' :
-                            targetRole === 'PSH' ? 'Presales Head' :
-                                targetRole === 'PH' ? 'Practice Head' :
-                                    targetRole === 'SH' ? 'Sales Head' :
-                                        targetRole === 'SP' ? 'Sales Representative' :
-                                            targetRole === 'LEGAL' ? 'Legal Lead' :
-                                                targetRole === 'FINANCE' ? 'Finance Controller' : 'Solution Architect'
-        });
-
-        if (targetRole === 'GH' || targetRole === 'PSH') navigate('/management/all');
-        else if (targetRole === 'PH') navigate('/practice-head/dashboard');
-        else if (targetRole === 'SH') navigate('/sales/action-required');
-        else if (targetRole === 'SA' || targetRole === 'SP' || targetRole === 'LEGAL' || targetRole === 'FINANCE') navigate('/assigned-to-me');
+        await login(u.email);
+        navigate('/dashboard');
     };
 
     return (
@@ -139,19 +111,19 @@ export function Sidebar() {
                     <span className="text-sm">Home</span>
                 </div>
 
-                {/* GH & PSH Navigation */}
-                {['GH', 'PSH'].includes(user.role) && (
+                {/* GH, PSH & ADMIN Navigation */}
+                {['GH', 'PSH', 'ADMIN'].includes(user.role) && (
                     <>
                         <div className="px-6 pt-4 pb-1 text-[10px] font-bold text-gray-400 uppercase">Management</div>
-                        <div onClick={() => navigate('/management/dashboard')} className={`flex items-center gap-3 px-6 py-2 cursor-pointer ${isPathActive('/management/dashboard') ? 'bg-white text-black font-bold border-r-4 border-[#5c5c5c]' : 'text-gray-600 hover:bg-gray-100'}`}>
+                        <div onClick={() => navigate('/dashboard')} className={`flex items-center gap-3 px-6 py-2 cursor-pointer ${isPathActive('/dashboard') ? 'bg-white text-black font-bold border-r-4 border-[#5c5c5c]' : 'text-gray-600 hover:bg-gray-100'}`}>
                             <LayoutDashboard size={18} />
                             <span className="text-sm">Dashboard</span>
                         </div>
                     </>
                 )}
 
-                {/* Administration (GH Only) */}
-                {user.role === 'GH' && (
+                {/* Administration (GH & ADMIN) */}
+                {['GH', 'ADMIN'].includes(user.role) && (
                     <div onClick={() => navigate('/admin')} className={`flex items-center gap-3 px-6 py-2 cursor-pointer ${isPathActive('/admin') ? 'bg-white text-black font-bold border-r-4 border-[#5c5c5c]' : 'text-gray-600 hover:bg-gray-100'}`}>
                         <Settings size={18} />
                         <span className="text-sm">Admin Panel</span>
@@ -267,7 +239,7 @@ export function Sidebar() {
                             : 'Checking status...'}
                     </span>
                 </div>
-                {['GH', 'PSH'].includes(user.role) && (
+                {['GH', 'PSH', 'ADMIN'].includes(user.role) && (
                     <button
                         onClick={handleSyncNow}
                         disabled={isSyncing}
