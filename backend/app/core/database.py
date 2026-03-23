@@ -30,7 +30,14 @@ def init_db():
         db_port = os.getenv("POSTGRES_PORT")
         
         # Connect to default 'postgres' db to check if 'bqs' exists
-        conn = psycopg2.connect(dbname='postgres', user=db_user, host=db_host, password=db_password, port=db_port, connect_timeout=5)
+        conn = psycopg2.connect(
+            dbname='postgres',
+            user=os.getenv("DB_USER", "postgres"),
+            host=os.getenv("DB_HOST", "127.0.0.1"),
+            password=os.getenv("DB_PASSWORD"),
+            port=int(os.getenv("DB_PORT", "5432")),
+            connect_timeout=5
+        )
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         with conn.cursor() as cur:
             cur.execute("SELECT 1 FROM pg_catalog.pg_database WHERE datname = 'bqs'")
